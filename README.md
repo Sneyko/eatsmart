@@ -73,6 +73,7 @@ Bot tout-en-un, autonome (un seul process Node, persistance SQLite) :
      - Read Message History
      - Manage Messages
      - Use External Emojis
+     - Manage Threads
      - Create Private Threads
      - Send Messages in Threads
    - Copie l'URL générée, ouvre-la dans un navigateur, sélectionne ton serveur, **Authorize**.

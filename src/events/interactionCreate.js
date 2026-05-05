@@ -1,4 +1,10 @@
-import { Events } from 'discord.js';
+import {
+  ActionRowBuilder,
+  Events,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+} from 'discord.js';
 import { logger } from '../config.js';
 import { errorEmbed } from '../utils/embeds.js';
 import { getTicketByChannel } from '../db/queries.js';
@@ -6,6 +12,7 @@ import {
   claimTicket,
   closeTicket,
   confirmCloseTicket,
+  consumeCloseReason,
   deleteTicket,
   handleAnswersModal,
   handleFeedbackComment,
@@ -58,7 +65,6 @@ async function routeButton(interaction) {
     return confirmCloseTicket(interaction, ticket, null);
   }
   if (id === 'ticket:close-reason') {
-    const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = await import('discord.js');
     const modal = new ModalBuilder().setCustomId('ticket:close-reason-modal').setTitle('Fermer le ticket');
     modal.addComponents(
       new ActionRowBuilder().addComponents(
@@ -72,11 +78,13 @@ async function routeButton(interaction) {
     );
     return interaction.showModal(modal);
   }
-  if (id.startsWith('ticket:close-confirm')) {
-    const parts = id.split(':');
-    const reason = parts[2] ? decodeURIComponent(parts[2]) : null;
+  if (id.startsWith('ticket:close-confirm:')) {
+    const ticketId = Number(id.split(':')[2]);
     const ticket = getTicketByChannel(interaction.channel.id);
-    if (!ticket) return interaction.reply({ embeds: [errorEmbed('Ticket introuvable.')], ephemeral: true });
+    if (!ticket || ticket.id !== ticketId) {
+      return interaction.reply({ embeds: [errorEmbed('Ticket introuvable.')], ephemeral: true });
+    }
+    const reason = consumeCloseReason(ticket.id);
     await interaction.update({ content: 'Fermeture en cours…', embeds: [], components: [] });
     return closeTicket(interaction.client, ticket, { actorId: interaction.user.id, reason });
   }

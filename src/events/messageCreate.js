@@ -6,7 +6,7 @@ export const name = Events.MessageCreate;
 /**
  * @param {import('discord.js').Message} message
  */
-export function execute(message) {
+export async function execute(message) {
   if (!message.guild || message.author.bot) return;
-  recordMessage(message);
+  await recordMessage(message);
 }
