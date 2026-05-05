@@ -34,6 +34,26 @@ import {
 } from '../db/queries.js';
 import { cloneAttachment, generateTranscript } from './transcripts.js';
 
+const pendingCloseReasons = new Map();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of pendingCloseReasons) {
+    if (v.expiresAt < now) pendingCloseReasons.delete(k);
+  }
+}, 5 * 60 * 1000).unref?.();
+
+/**
+ * Récupère et purge la raison stockée pour la confirmation de fermeture.
+ * @param {number} ticketId
+ * @returns {string|null}
+ */
+export function consumeCloseReason(ticketId) {
+  const entry = pendingCloseReasons.get(ticketId);
+  pendingCloseReasons.delete(ticketId);
+  return entry?.reason ?? null;
+}
+
 /**
  * Construit la rangée de boutons d'action présents dans un ticket ouvert.
  */
@@ -378,9 +398,15 @@ async function openTicket(interaction, button, answers) {
  * @param {object} ticket
  */
 export async function confirmCloseTicket(interaction, ticket, reason = null) {
+  if (reason) {
+    pendingCloseReasons.set(ticket.id, {
+      reason,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+  }
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`ticket:close-confirm${reason ? `:${encodeURIComponent(reason)}` : ''}`)
+      .setCustomId(`ticket:close-confirm:${ticket.id}`)
       .setLabel('Confirmer la fermeture')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
@@ -689,15 +715,15 @@ export async function changeOwner(interaction, user) {
  * Touch ticket activity + premier temps de réponse staff.
  * @param {import('discord.js').Message} message
  */
-export function recordMessage(message) {
+export async function recordMessage(message) {
   const ticket = getTicketByChannel(message.channel.id);
   if (!ticket || ticket.status !== 'open') return;
   touchTicket(message.channel.id);
-  if (
-    message.author.id !== ticket.owner_id &&
-    !message.author.bot &&
-    isStaff(message.member)
-  ) {
+  if (message.author.id === ticket.owner_id || message.author.bot) return;
+  const member =
+    message.member ??
+    (await message.guild.members.fetch(message.author.id).catch(() => null));
+  if (member && isStaff(member)) {
     setFirstResponse(ticket.id);
   }
 }
