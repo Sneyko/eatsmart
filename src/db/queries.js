@@ -23,7 +23,9 @@ function prepare() {
       transcript_channel_id = COALESCE(?, transcript_channel_id),
       support_role_ids = COALESCE(?, support_role_ids),
       max_open_per_user = COALESCE(?, max_open_per_user),
-      autoclose_hours = COALESCE(?, autoclose_hours)
+      autoclose_hours = COALESCE(?, autoclose_hours),
+      cooldown_max_tickets = COALESCE(?, cooldown_max_tickets),
+      cooldown_window_minutes = COALESCE(?, cooldown_window_minutes)
     WHERE guild_id = ?
   `);
 
@@ -101,7 +103,25 @@ function prepare() {
     WHERE t.status = 'open'
       AND gc.autoclose_hours > 0
       AND (strftime('%s','now') - t.last_activity_at) > gc.autoclose_hours * 3600
+      AND (t.snoozed_until IS NULL OR t.snoozed_until < strftime('%s','now'))
   `);
+
+  stmts.snoozeTicket = db.prepare(`UPDATE tickets SET snoozed_until = ? WHERE id = ?`);
+
+  stmts.countRecentTicketsByUser = db.prepare(`
+    SELECT COUNT(*) AS c FROM tickets
+    WHERE guild_id = ? AND owner_id = ?
+      AND opened_at > strftime('%s','now') - ?
+  `);
+
+  stmts.insertMacro = db.prepare(`
+    INSERT INTO macros (guild_id, name, content, created_by) VALUES (?, ?, ?, ?)
+  `);
+  stmts.getMacro = db.prepare(`SELECT * FROM macros WHERE guild_id = ? AND name = ?`);
+  stmts.listMacros = db.prepare(`SELECT * FROM macros WHERE guild_id = ? ORDER BY name ASC`);
+  stmts.deleteMacro = db.prepare(`DELETE FROM macros WHERE guild_id = ? AND name = ?`);
+  stmts.updateMacro = db.prepare(`UPDATE macros SET content = ? WHERE guild_id = ? AND name = ?`);
+  stmts.incrementMacroUses = db.prepare(`UPDATE macros SET uses_count = uses_count + 1 WHERE id = ?`);
 
   stmts.addBlacklist = db.prepare(`
     INSERT INTO blacklist (guild_id, user_id, reason, added_by) VALUES (?, ?, ?, ?)
@@ -168,6 +188,8 @@ export function updateTicketsConfig(guildId, patch) {
     patch.support_role_ids ?? null,
     patch.max_open_per_user ?? null,
     patch.autoclose_hours ?? null,
+    patch.cooldown_max_tickets ?? null,
+    patch.cooldown_window_minutes ?? null,
     guildId,
   );
 }
@@ -259,6 +281,9 @@ export const setTicketOwner = (id, userId) => prepare().setTicketOwner.run(userI
 export const touchTicket = (channelId) => prepare().touchTicket.run(channelId);
 export const setFirstResponse = (id) => prepare().setFirstResponse.run(id);
 export const listStaleOpenTickets = () => prepare().listStaleOpenTickets.all();
+export const snoozeTicket = (id, until) => prepare().snoozeTicket.run(until, id);
+export const countRecentTicketsByUser = (guildId, userId, windowSeconds) =>
+  prepare().countRecentTicketsByUser.get(guildId, userId, windowSeconds).c;
 
 export const addBlacklist = (guildId, userId, reason, addedBy) =>
   prepare().addBlacklist.run(guildId, userId, reason, addedBy);
@@ -275,6 +300,15 @@ export const updateFeedbackComment = (id, comment) =>
 
 export const logAction = (guildId, ticketId, userId, action, meta = null) =>
   prepare().logAction.run(guildId, ticketId, userId, action, meta);
+
+export const createMacro = (guildId, name, content, userId) =>
+  prepare().insertMacro.run(guildId, name, content, userId);
+export const getMacro = (guildId, name) => prepare().getMacro.get(guildId, name);
+export const listMacros = (guildId) => prepare().listMacros.all(guildId);
+export const deleteMacro = (guildId, name) => prepare().deleteMacro.run(guildId, name);
+export const updateMacro = (guildId, name, content) =>
+  prepare().updateMacro.run(content, guildId, name);
+export const incrementMacroUses = (id) => prepare().incrementMacroUses.run(id);
 
 export const statsCount = (guildId) => prepare().statsCount.get(guildId);
 export const statsTopStaff = (guildId) => prepare().statsTopStaff.all(guildId);

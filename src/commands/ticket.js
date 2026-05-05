@@ -8,6 +8,7 @@ import {
   confirmCloseTicket,
   removeUserFromTicket,
   renameTicket,
+  snoozeTicketCmd,
   transferTicket,
 } from '../handlers/tickets.js';
 
@@ -51,6 +52,19 @@ export const data = new SlashCommandBuilder()
       .setName('owner')
       .setDescription('Changer l’owner du ticket (admin)')
       .addUserOption((o) => o.setName('user').setDescription('Nouveau owner').setRequired(true)),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('snooze')
+      .setDescription("Met en pause l'autoclose pour X heures")
+      .addIntegerOption((o) =>
+        o
+          .setName('hours')
+          .setDescription('Durée en heures')
+          .setRequired(true)
+          .setMinValue(1)
+          .setMaxValue(168),
+      ),
   );
 
 /**
@@ -74,4 +88,5 @@ export async function execute(interaction) {
   if (sub === 'rename') return renameTicket(interaction, interaction.options.getString('name', true));
   if (sub === 'transfer') return transferTicket(interaction, interaction.options.getUser('user', true));
   if (sub === 'owner') return changeOwner(interaction, interaction.options.getUser('user', true));
+  if (sub === 'snooze') return snoozeTicketCmd(interaction, interaction.options.getInteger('hours', true));
 }
