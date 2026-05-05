@@ -1,0 +1,14 @@
+import { Events } from 'discord.js';
+import { logger } from '../config.js';
+import { startAutoClose } from '../utils/autoclose.js';
+
+export const name = Events.ClientReady;
+export const once = true;
+
+/**
+ * @param {import('discord.js').Client} client
+ */
+export function execute(client) {
+  logger.info({ tag: client.user.tag, id: client.user.id }, 'Bot ready');
+  startAutoClose(client);
+}
