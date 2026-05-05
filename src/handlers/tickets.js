@@ -6,6 +6,8 @@ import {
   EmbedBuilder,
   ModalBuilder,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
@@ -96,7 +98,8 @@ export function closedActionRow() {
 }
 
 /**
- * Construit l'embed et les boutons d'un panel envoyés dans un channel public.
+ * Construit l'embed et les composants d'un panel envoyés dans un channel public.
+ * Choisit boutons ou dropdown selon `panel.display_mode`.
  * @param {object} panel
  * @param {object[]} buttons
  */
@@ -109,22 +112,47 @@ export function buildPanelMessage(panel, buttons) {
   if (panel.thumbnail) embed.setThumbnail(panel.thumbnail);
 
   const components = [];
-  if (buttons.length > 0) {
-    const row = new ActionRowBuilder();
-    for (const b of buttons.slice(0, 5)) {
-      const btn = new ButtonBuilder()
-        .setCustomId(`panel:open:${b.id}`)
+  if (buttons.length === 0) return { embeds: [embed], components };
+
+  if (panel.display_mode === 'select') {
+    const placeholder =
+      buttons.find((b) => b.placeholder_text)?.placeholder_text ||
+      'Sélectionnez une option pour ouvrir un ticket';
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`panel:select:${panel.id}`)
+      .setPlaceholder(truncate(placeholder, 150))
+      .setMinValues(1)
+      .setMaxValues(1);
+    for (const b of buttons.slice(0, 25)) {
+      const opt = new StringSelectMenuOptionBuilder()
         .setLabel(truncate(b.label, LIMITS.BUTTON_LABEL))
-        .setStyle(b.style ?? ButtonStyle.Primary);
+        .setValue(String(b.id));
+      if (b.description) opt.setDescription(truncate(b.description, 100));
       if (b.emoji) {
         try {
-          btn.setEmoji(b.emoji);
+          opt.setEmoji(b.emoji);
         } catch {}
       }
-      row.addComponents(btn);
+      select.addOptions(opt);
     }
-    components.push(row);
+    components.push(new ActionRowBuilder().addComponents(select));
+    return { embeds: [embed], components };
   }
+
+  const row = new ActionRowBuilder();
+  for (const b of buttons.slice(0, 5)) {
+    const btn = new ButtonBuilder()
+      .setCustomId(`panel:open:${b.id}`)
+      .setLabel(truncate(b.label, LIMITS.BUTTON_LABEL))
+      .setStyle(b.style ?? ButtonStyle.Primary);
+    if (b.emoji) {
+      try {
+        btn.setEmoji(b.emoji);
+      } catch {}
+    }
+    row.addComponents(btn);
+  }
+  components.push(row);
   return { embeds: [embed], components };
 }
 
