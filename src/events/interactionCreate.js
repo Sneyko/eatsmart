@@ -22,6 +22,7 @@ import {
 } from '../handlers/tickets.js';
 import {
   handleCreateModal,
+  handleImportModal,
   handlePlaceholdersModal,
   handleQuestionsModal,
 } from '../commands/panel.js';
@@ -120,6 +121,7 @@ async function routeModal(interaction) {
   if (id.startsWith('panel:create')) return handleCreateModal(interaction);
   if (id === 'panel:questions') return handleQuestionsModal(interaction);
   if (id === 'panel:placeholders') return handlePlaceholdersModal(interaction);
+  if (id === 'panel:import') return handleImportModal(interaction);
   if (id.startsWith('panel:answers:')) {
     return handleAnswersModal(interaction, id.split(':')[2]);
   }

@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ChannelType,
   EmbedBuilder,
   ModalBuilder,
@@ -109,6 +110,15 @@ export const data = new SlashCommandBuilder()
       .setName('delete')
       .setDescription('Supprimer un panel')
       .addIntegerOption((o) => o.setName('panel_id').setDescription('ID du panel').setRequired(true)),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('export')
+      .setDescription('Exporter un panel et ses boutons en JSON')
+      .addIntegerOption((o) => o.setName('panel_id').setDescription('ID du panel').setRequired(true)),
+  )
+  .addSubcommand((s) =>
+    s.setName('import').setDescription('Importer un panel depuis un JSON (ouvre un modal)'),
   );
 
 /**
@@ -127,6 +137,8 @@ export async function execute(interaction) {
   if (sub === 'send') return sendPanel(interaction);
   if (sub === 'list') return listCmd(interaction);
   if (sub === 'delete') return deleteCmd(interaction);
+  if (sub === 'export') return exportCmd(interaction);
+  if (sub === 'import') return openImportModal(interaction);
 }
 
 async function openCreateModal(interaction) {
@@ -392,4 +404,161 @@ async function deleteCmd(interaction) {
   if (result.changes === 0)
     return interaction.reply({ embeds: [errorEmbed('Panel introuvable.')], ephemeral: true });
   return interaction.reply({ embeds: [successEmbed(`Panel #${panelId} supprimé.`)], ephemeral: true });
+}
+
+/**
+ * Export d'un panel + ses boutons en JSON portable (sans IDs serveur).
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ */
+async function exportCmd(interaction) {
+  const panelId = interaction.options.getInteger('panel_id', true);
+  const panel = getPanel(panelId, interaction.guild.id);
+  if (!panel) {
+    return interaction.reply({ embeds: [errorEmbed('Panel introuvable.')], ephemeral: true });
+  }
+  const buttons = getButtons(panelId);
+
+  const exportData = {
+    version: 1,
+    panel: {
+      title: panel.title,
+      description: panel.description,
+      color: panel.color,
+      image: panel.image,
+      thumbnail: panel.thumbnail,
+      display_mode: panel.display_mode || 'buttons',
+    },
+    buttons: buttons.map((b) => ({
+      label: b.label,
+      emoji: b.emoji,
+      style: b.style,
+      mention_owner: b.mention_owner,
+      name_template: b.name_template,
+      open_message: b.open_message,
+      questions: b.questions,
+      create_staff_thread: b.create_staff_thread,
+      position: b.position,
+      description: b.description ?? null,
+      placeholder_text: b.placeholder_text ?? null,
+    })),
+  };
+
+  const json = JSON.stringify(exportData, null, 2);
+
+  if (json.length < 1900) {
+    return interaction.reply({
+      content: `\`\`\`json\n${json}\n\`\`\``,
+      ephemeral: true,
+    });
+  }
+  const buf = Buffer.from(json, 'utf8');
+  const file = new AttachmentBuilder(buf, { name: `panel-${panelId}-export.json` });
+  return interaction.reply({
+    content: `Export du panel #${panelId} (en pièce jointe — JSON trop long pour être affiché)`,
+    files: [file],
+    ephemeral: true,
+  });
+}
+
+/**
+ * Ouvre le modal d'import (textarea pour coller le JSON).
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ */
+async function openImportModal(interaction) {
+  const modal = new ModalBuilder().setCustomId('panel:import').setTitle('Importer un panel');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('json')
+        .setLabel('Colle ici le JSON exporté')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(LIMITS.MODAL_INPUT)
+        .setPlaceholder('{ "version": 1, "panel": { ... }, "buttons": [ ... ] }'),
+    ),
+  );
+  await interaction.showModal(modal);
+}
+
+/**
+ * Soumission du modal panel:import — recrée le panel + boutons depuis le JSON.
+ * Les IDs serveur (channel, rôles, catégorie) ne sont jamais dans le JSON et
+ * doivent être reconfigurés manuellement après l'import.
+ * @param {import('discord.js').ModalSubmitInteraction} interaction
+ */
+export async function handleImportModal(interaction) {
+  const raw = interaction.fields.getTextInputValue('json').trim();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return interaction.reply({ embeds: [errorEmbed('JSON invalide.')], ephemeral: true });
+  }
+  if (!data || typeof data !== 'object' || !data.panel || !Array.isArray(data.buttons)) {
+    return interaction.reply({
+      embeds: [errorEmbed('JSON invalide : structure attendue { panel: {...}, buttons: [...] }.')],
+      ephemeral: true,
+    });
+  }
+  if (data.version && data.version !== 1) {
+    return interaction.reply({
+      embeds: [errorEmbed(`Version d'export ${data.version} non supportée.`)],
+      ephemeral: true,
+    });
+  }
+  if (data.buttons.length > 25) {
+    return interaction.reply({
+      embeds: [errorEmbed('Trop de boutons (max 25).')],
+      ephemeral: true,
+    });
+  }
+
+  const panelId = createPanel(interaction.guild.id, {
+    title: truncate(data.panel.title || 'Panel importé', LIMITS.EMBED_TITLE),
+    description: data.panel.description ? truncate(data.panel.description, LIMITS.EMBED_DESCRIPTION) : null,
+    color: data.panel.color ?? 5793266,
+    image: data.panel.image ?? null,
+    thumbnail: data.panel.thumbnail ?? null,
+    display_mode: data.panel.display_mode === 'select' ? 'select' : 'buttons',
+  });
+
+  let imported = 0;
+  for (const b of data.buttons) {
+    try {
+      addButton(panelId, {
+        label: truncate(b.label || 'Option', LIMITS.BUTTON_LABEL),
+        emoji: b.emoji ?? null,
+        style: b.style ?? 1,
+        category_id: null,
+        support_role_ids: '[]',
+        ping_role_id: null,
+        mention_owner: b.mention_owner ?? 1,
+        name_template: b.name_template || 'ticket-{username}-{number}',
+        open_message: b.open_message ?? null,
+        questions: typeof b.questions === 'string' ? b.questions : JSON.stringify(b.questions || []),
+        add_role_on_open: null,
+        remove_role_on_close: null,
+        create_staff_thread: b.create_staff_thread ?? 0,
+        position: b.position ?? 0,
+        description: b.description ?? null,
+        placeholder_text: b.placeholder_text ?? null,
+      });
+      imported++;
+    } catch {
+      // bouton malformé : on skip silencieusement
+    }
+  }
+
+  return interaction.reply({
+    embeds: [
+      successEmbed(
+        `Panel #${panelId} importé avec ${imported} bouton(s).\n\n` +
+          `⚠️ Reconfigure les éléments propres à ce serveur :\n` +
+          `• catégorie de tickets, rôles support, rôles ping, rôles add/remove\n` +
+          `• via \`/panel addbutton\` (recréer chaque bouton avec les rôles) ou en éditant la DB.\n\n` +
+          `Puis envoie-le : \`/panel send panel_id:${panelId} channel:#xxx\``,
+      ),
+    ],
+    ephemeral: true,
+  });
 }
