@@ -18,6 +18,7 @@ import { isStaff, isAdmin } from '../utils/permissions.js';
 import { errorEmbed, infoEmbed, successEmbed } from '../utils/embeds.js';
 import {
   countOpenTickets,
+  countRecentTicketsByUser,
   createTicket,
   getButton,
   getPanel,
@@ -31,6 +32,7 @@ import {
   setTicketClaimed,
   setTicketOwner,
   setTicketStatus,
+  snoozeTicket,
   touchTicket,
   updateFeedbackComment,
 } from '../db/queries.js';
@@ -57,10 +59,13 @@ export function consumeCloseReason(ticketId) {
 }
 
 /**
- * Construit la rangée de boutons d'action présents dans un ticket ouvert.
+ * Construit les rangées de boutons d'un ticket ouvert.
+ * Retourne un tableau : [user_row, staff_row] pour séparer visuellement
+ * les actions générales (close) des actions staff (claim).
+ * @returns {ActionRowBuilder[]}
  */
 export function ticketActionRow() {
-  return new ActionRowBuilder().addComponents(
+  const userRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:close')
       .setLabel('Close')
@@ -71,12 +76,15 @@ export function ticketActionRow() {
       .setLabel('Close with reason')
       .setEmoji('📝')
       .setStyle(ButtonStyle.Secondary),
+  );
+  const staffRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:claim')
-      .setLabel('Claim')
-      .setEmoji('🙋')
+      .setLabel('Staff : Claim')
+      .setEmoji('🛡️')
       .setStyle(ButtonStyle.Primary),
   );
+  return [userRow, staffRow];
 }
 
 /**
@@ -169,6 +177,21 @@ export async function handlePanelButtonClick(interaction, buttonId) {
       embeds: [errorEmbed('Tu es blacklisté et ne peux pas ouvrir de ticket.')],
       ephemeral: true,
     });
+  }
+  if (cfg.cooldown_max_tickets > 0) {
+    const windowMin = cfg.cooldown_window_minutes || 60;
+    const windowSec = windowMin * 60;
+    const recent = countRecentTicketsByUser(interaction.guild.id, interaction.user.id, windowSec);
+    if (recent >= cfg.cooldown_max_tickets) {
+      return interaction.reply({
+        embeds: [
+          errorEmbed(
+            `Limite de ${cfg.cooldown_max_tickets} tickets par ${windowMin} min atteinte. Réessaye plus tard.`,
+          ),
+        ],
+        ephemeral: true,
+      });
+    }
   }
   const limit = cfg.max_open_per_user ?? 1;
   if (limit > 0 && countOpenTickets(interaction.guild.id, interaction.user.id) >= limit) {
@@ -397,7 +420,7 @@ async function openTicket(interaction, button, answers) {
   await channel.send({
     content: mentions.join(' ') || undefined,
     embeds,
-    components: [ticketActionRow()],
+    components: ticketActionRow(),
     allowedMentions: {
       users: button.mention_owner ? [member.id] : [],
       roles: button.ping_role_id ? [button.ping_role_id] : [],
@@ -724,6 +747,25 @@ export async function transferTicket(interaction, user) {
   setTicketClaimed(ticket.id, user.id);
   logAction(interaction.guild.id, ticket.id, interaction.user.id, 'transfer', user.id);
   return interaction.reply({ embeds: [successEmbed(`Transféré à <@${user.id}>.`)] });
+}
+
+/**
+ * Met l'autoclose en pause pendant `hours` heures.
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ * @param {number} hours
+ */
+export async function snoozeTicketCmd(interaction, hours) {
+  const ticket = getTicketByChannel(interaction.channel.id);
+  if (!ticket) return interaction.reply({ embeds: [errorEmbed('Pas un ticket.')], ephemeral: true });
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({ embeds: [errorEmbed('Staff uniquement.')], ephemeral: true });
+  }
+  const until = Math.floor(Date.now() / 1000) + hours * 3600;
+  snoozeTicket(ticket.id, until);
+  logAction(interaction.guild.id, ticket.id, interaction.user.id, 'snooze', String(hours));
+  return interaction.reply({
+    embeds: [successEmbed(`Ticket en pause pendant ${hours}h. Autoclose désactivé jusque <t:${until}:R>.`)],
+  });
 }
 
 /**

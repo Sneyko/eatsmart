@@ -124,12 +124,27 @@ export function initDb() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_staff_actions_guild ON staff_actions(guild_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS macros (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      guild_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s','now')),
+      uses_count INTEGER DEFAULT 0,
+      UNIQUE(guild_id, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_macros_guild ON macros(guild_id);
   `);
 
   // Migrations idempotentes (no-op si la colonne existe déjà).
   try { db.exec(`ALTER TABLE panels ADD COLUMN display_mode TEXT DEFAULT 'buttons'`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN description TEXT`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN placeholder_text TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_max_tickets INTEGER DEFAULT 0`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_window_minutes INTEGER DEFAULT 60`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER`); } catch {}
 
   logger.info({ path: config.dbPath }, 'Database initialised');
   return db;

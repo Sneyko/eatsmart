@@ -51,6 +51,20 @@ export const data = new SlashCommandBuilder()
           .setDescription("Auto-close après X heures d'inactivité (0 = off)")
           .setMinValue(0)
           .setMaxValue(720),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('cooldown_max')
+          .setDescription('Max tickets ouverts par user dans la fenêtre (0 = off)')
+          .setMinValue(0)
+          .setMaxValue(20),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('cooldown_window_min')
+          .setDescription('Fenêtre de cooldown en minutes (default 60)')
+          .setMinValue(5)
+          .setMaxValue(1440),
       ),
   )
   .addSubcommand((s) =>
@@ -93,6 +107,8 @@ export async function execute(interaction) {
     const supportRole = interaction.options.getRole('support_role');
     const maxOpen = interaction.options.getInteger('max_open_per_user');
     const autoclose = interaction.options.getInteger('autoclose_hours');
+    const cooldownMax = interaction.options.getInteger('cooldown_max');
+    const cooldownWindow = interaction.options.getInteger('cooldown_window_min');
 
     updateTicketsConfig(interaction.guild.id, {
       ticket_category_id: category?.id ?? null,
@@ -101,6 +117,8 @@ export async function execute(interaction) {
       support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : null,
       max_open_per_user: maxOpen ?? null,
       autoclose_hours: autoclose ?? null,
+      cooldown_max_tickets: cooldownMax ?? null,
+      cooldown_window_minutes: cooldownWindow ?? null,
     });
     invalidateGuildConfig(interaction.guild.id);
     return interaction.reply({
