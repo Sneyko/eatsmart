@@ -1,15 +1,23 @@
 import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import { statsAvgRating, statsCount, statsTopStaff } from '../db/queries.js';
+import { errorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
   .setName('stats')
   .setDescription('Statistiques tickets du serveur')
+  .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
 
 /**
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
+  if (!interaction.guild) {
+    return interaction.reply({
+      embeds: [errorEmbed('Commande serveur uniquement.')],
+      ephemeral: true,
+    });
+  }
   const counts = statsCount(interaction.guild.id) || {};
   const top = statsTopStaff(interaction.guild.id);
   const fb = statsAvgRating(interaction.guild.id) || {};

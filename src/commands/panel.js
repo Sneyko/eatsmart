@@ -25,6 +25,7 @@ import { buildPanelMessage } from '../handlers/tickets.js';
 export const data = new SlashCommandBuilder()
   .setName('panel')
   .setDescription('Gérer les panels de tickets')
+  .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) => s.setName('create').setDescription('Créer un nouveau panel (ouvre un modal)'))
   .addSubcommand((s) =>
@@ -92,6 +93,12 @@ export const data = new SlashCommandBuilder()
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
+  if (!interaction.guild) {
+    return interaction.reply({
+      embeds: [errorEmbed('Commande serveur uniquement.')],
+      ephemeral: true,
+    });
+  }
   const sub = interaction.options.getSubcommand();
   if (sub === 'create') return openCreateModal(interaction);
   if (sub === 'addbutton') return addButtonCmd(interaction);

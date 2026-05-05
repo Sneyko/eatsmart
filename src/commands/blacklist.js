@@ -5,6 +5,7 @@ import { errorEmbed, successEmbed } from '../utils/embeds.js';
 export const data = new SlashCommandBuilder()
   .setName('blacklist')
   .setDescription('Bloquer / débloquer des users de l’ouverture de tickets')
+  .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
@@ -25,6 +26,12 @@ export const data = new SlashCommandBuilder()
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
+  if (!interaction.guild) {
+    return interaction.reply({
+      embeds: [errorEmbed('Commande serveur uniquement.')],
+      ephemeral: true,
+    });
+  }
   const sub = interaction.options.getSubcommand();
   if (sub === 'add') {
     const user = interaction.options.getUser('user', true);
