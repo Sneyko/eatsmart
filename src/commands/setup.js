@@ -11,6 +11,7 @@ import { parseColor, truncate, LIMITS } from '../utils/validators.js';
 export const data = new SlashCommandBuilder()
   .setName('setup')
   .setDescription('Configurer le bot (welcome, tickets)')
+  .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
@@ -77,6 +78,12 @@ export const data = new SlashCommandBuilder()
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
 export async function execute(interaction) {
+  if (!interaction.guild) {
+    return interaction.reply({
+      embeds: [errorEmbed("Cette commande ne s'utilise que sur un serveur.")],
+      ephemeral: true,
+    });
+  }
   ensureGuildConfig(interaction.guild.id);
   const sub = interaction.options.getSubcommand();
   if (sub === 'tickets') {
