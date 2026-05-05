@@ -27,7 +27,20 @@ export const data = new SlashCommandBuilder()
   .setDescription('Gérer les panels de tickets')
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-  .addSubcommand((s) => s.setName('create').setDescription('Créer un nouveau panel (ouvre un modal)'))
+  .addSubcommand((s) =>
+    s
+      .setName('create')
+      .setDescription('Créer un nouveau panel (ouvre un modal)')
+      .addStringOption((o) =>
+        o
+          .setName('mode')
+          .setDescription('Affichage : boutons (max 5) ou dropdown (max 25)')
+          .addChoices(
+            { name: 'Boutons (max 5 options)', value: 'buttons' },
+            { name: 'Dropdown menu (max 25 options)', value: 'select' },
+          ),
+      ),
+  )
   .addSubcommand((s) =>
     s
       .setName('addbutton')
@@ -64,6 +77,15 @@ export const data = new SlashCommandBuilder()
         o.setName('name_template').setDescription('Template du nom (ex : ticket-{username}-{number})'),
       )
       .addStringOption((o) => o.setName('open_message').setDescription('Message d’ouverture custom'))
+      .addStringOption((o) =>
+        o.setName('description').setDescription('Description (visible dans dropdown uniquement)').setMaxLength(100),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('placeholder')
+          .setDescription('Texte du dropdown quand rien sélectionné (1er bouton suffit)')
+          .setMaxLength(150),
+      )
       .addBooleanOption((o) => o.setName('mention_owner').setDescription('Mentionner l’owner à l’ouverture'))
       .addBooleanOption((o) => o.setName('staff_thread').setDescription('Créer un thread privé staff'))
       .addBooleanOption((o) => o.setName('with_questions').setDescription('Demander 1-5 questions via modal')),
@@ -108,7 +130,10 @@ export async function execute(interaction) {
 }
 
 async function openCreateModal(interaction) {
-  const modal = new ModalBuilder().setCustomId('panel:create').setTitle('Nouveau panel');
+  const mode = interaction.options.getString('mode') || 'buttons';
+  const modal = new ModalBuilder()
+    .setCustomId(`panel:create:${mode}`)
+    .setTitle('Nouveau panel');
   modal.addComponents(
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
@@ -159,6 +184,7 @@ async function openCreateModal(interaction) {
  * @param {import('discord.js').ModalSubmitInteraction} interaction
  */
 export async function handleCreateModal(interaction) {
+  const mode = interaction.customId.split(':')[2] === 'select' ? 'select' : 'buttons';
   const title = interaction.fields.getTextInputValue('title');
   const description = interaction.fields.getTextInputValue('description');
   const color = interaction.fields.getTextInputValue('color');
@@ -170,11 +196,12 @@ export async function handleCreateModal(interaction) {
     color: parseColor(color),
     image: image || null,
     thumbnail: thumbnail || null,
+    display_mode: mode,
   });
   return interaction.reply({
     embeds: [
       successEmbed(
-        `Panel #${id} créé. Ajoute un bouton avec :\n\`/panel addbutton panel_id:${id} label:Support\``,
+        `Panel #${id} créé (${mode === 'select' ? 'dropdown' : 'boutons'}). Ajoute une option avec :\n\`/panel addbutton panel_id:${id} label:Support\``,
       ),
     ],
     ephemeral: true,
@@ -185,9 +212,10 @@ async function addButtonCmd(interaction) {
   const panelId = interaction.options.getInteger('panel_id', true);
   const panel = getPanel(panelId, interaction.guild.id);
   if (!panel) return interaction.reply({ embeds: [errorEmbed('Panel introuvable.')], ephemeral: true });
-  if (countButtons(panelId) >= 5) {
+  const max = panel.display_mode === 'select' ? 25 : 5;
+  if (countButtons(panelId) >= max) {
     return interaction.reply({
-      embeds: [errorEmbed('Un panel ne peut avoir que 5 boutons max (limite Discord).')],
+      embeds: [errorEmbed(`Ce panel est plein : max ${max} options (mode ${panel.display_mode === 'select' ? 'dropdown' : 'boutons'}).`)],
       ephemeral: true,
     });
   }
@@ -197,24 +225,28 @@ async function addButtonCmd(interaction) {
   const removeRole = interaction.options.getRole('remove_role_on_close');
   const category = interaction.options.getChannel('category');
   const withQuestions = interaction.options.getBoolean('with_questions');
+  const description = interaction.options.getString('description');
+  const placeholder = interaction.options.getString('placeholder');
+
+  const baseStub = {
+    label: interaction.options.getString('label', true),
+    emoji: interaction.options.getString('emoji'),
+    style: Number(interaction.options.getString('style') || '1'),
+    category_id: category?.id || null,
+    support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : '[]',
+    ping_role_id: pingRole?.id || null,
+    add_role_on_open: addRole?.id || null,
+    remove_role_on_close: removeRole?.id || null,
+    mention_owner: interaction.options.getBoolean('mention_owner') === false ? 0 : 1,
+    create_staff_thread: interaction.options.getBoolean('staff_thread') ? 1 : 0,
+    name_template: interaction.options.getString('name_template') || 'ticket-{username}-{number}',
+    open_message: interaction.options.getString('open_message') || null,
+    description: description || null,
+    placeholder_text: placeholder || null,
+  };
 
   if (withQuestions) {
-    const buttonStub = {
-      panelId,
-      label: interaction.options.getString('label', true),
-      emoji: interaction.options.getString('emoji'),
-      style: Number(interaction.options.getString('style') || '1'),
-      category_id: category?.id || null,
-      support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : '[]',
-      ping_role_id: pingRole?.id || null,
-      add_role_on_open: addRole?.id || null,
-      remove_role_on_close: removeRole?.id || null,
-      mention_owner: interaction.options.getBoolean('mention_owner') === false ? 0 : 1,
-      create_staff_thread: interaction.options.getBoolean('staff_thread') ? 1 : 0,
-      name_template: interaction.options.getString('name_template') || 'ticket-{username}-{number}',
-      open_message: interaction.options.getString('open_message') || null,
-    };
-    pendingButtons.set(interaction.user.id, buttonStub);
+    pendingButtons.set(interaction.user.id, { panelId, ...baseStub });
     const modal = new ModalBuilder()
       .setCustomId('panel:questions')
       .setTitle('Questions du formulaire (1-5)');
@@ -233,21 +265,7 @@ async function addButtonCmd(interaction) {
     return interaction.showModal(modal);
   }
 
-  const id = addButton(panelId, {
-    label: interaction.options.getString('label', true),
-    emoji: interaction.options.getString('emoji'),
-    style: Number(interaction.options.getString('style') || '1'),
-    category_id: category?.id || null,
-    support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : '[]',
-    ping_role_id: pingRole?.id || null,
-    add_role_on_open: addRole?.id || null,
-    remove_role_on_close: removeRole?.id || null,
-    mention_owner: interaction.options.getBoolean('mention_owner') === false ? 0 : 1,
-    create_staff_thread: interaction.options.getBoolean('staff_thread') ? 1 : 0,
-    name_template: interaction.options.getString('name_template') || 'ticket-{username}-{number}',
-    open_message: interaction.options.getString('open_message') || null,
-    questions: '[]',
-  });
+  const id = addButton(panelId, { ...baseStub, questions: '[]' });
   return interaction.reply({
     embeds: [successEmbed(`Bouton #${id} ajouté au panel #${panelId}.`)],
     ephemeral: true,
@@ -257,7 +275,8 @@ async function addButtonCmd(interaction) {
 const pendingButtons = new Map();
 
 /**
- * Soumission du modal panel:questions — finalise l'ajout du bouton avec ses questions.
+ * Soumission du modal panel:questions — collecte les labels et enchaîne sur le
+ * modal de placeholders. Si aucune question saisie, finalise directement.
  * @param {import('discord.js').ModalSubmitInteraction} interaction
  */
 export async function handleQuestionsModal(interaction) {
@@ -265,13 +284,59 @@ export async function handleQuestionsModal(interaction) {
   if (!stub) {
     return interaction.reply({ embeds: [errorEmbed('Session expirée. Relance la commande.')], ephemeral: true });
   }
-  pendingButtons.delete(interaction.user.id);
-  const questions = [];
+  const labels = [];
   for (let i = 0; i < 5; i++) {
     const v = interaction.fields.getTextInputValue(`q${i}`).trim();
-    if (v) questions.push({ label: v, required: true, long: true });
+    if (v) labels.push(v);
   }
-  const id = addButton(stub.panelId, { ...stub, questions: JSON.stringify(questions) });
+
+  if (labels.length === 0) {
+    pendingButtons.delete(interaction.user.id);
+    const id = addButton(stub.panelId, { ...stub, questions: '[]' });
+    return interaction.reply({
+      embeds: [successEmbed(`Bouton #${id} ajouté sans question.`)],
+      ephemeral: true,
+    });
+  }
+
+  pendingButtons.set(interaction.user.id, { ...stub, _pendingLabels: labels });
+  const modal = new ModalBuilder()
+    .setCustomId('panel:placeholders')
+    .setTitle('Placeholders (optionnels)');
+  labels.forEach((label, i) => {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(`p${i}`)
+          .setLabel(truncate(`Placeholder Q${i + 1}`, 45))
+          .setPlaceholder(truncate(label, 100))
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(100),
+      ),
+    );
+  });
+  return interaction.showModal(modal);
+}
+
+/**
+ * Soumission du modal panel:placeholders — finalise l'ajout du bouton avec ses
+ * questions et leurs placeholders.
+ * @param {import('discord.js').ModalSubmitInteraction} interaction
+ */
+export async function handlePlaceholdersModal(interaction) {
+  const stub = pendingButtons.get(interaction.user.id);
+  if (!stub || !stub._pendingLabels) {
+    return interaction.reply({ embeds: [errorEmbed('Session expirée. Relance la commande.')], ephemeral: true });
+  }
+  pendingButtons.delete(interaction.user.id);
+  const labels = stub._pendingLabels;
+  const questions = labels.map((label, i) => {
+    const placeholder = interaction.fields.getTextInputValue(`p${i}`).trim();
+    return { label, placeholder: placeholder || null, required: true, long: true };
+  });
+  const { _pendingLabels, ...clean } = stub;
+  const id = addButton(stub.panelId, { ...clean, questions: JSON.stringify(questions) });
   return interaction.reply({
     embeds: [successEmbed(`Bouton #${id} ajouté avec ${questions.length} question(s).`)],
     ephemeral: true,
@@ -313,7 +378,8 @@ async function listCmd(interaction) {
         .map((p) => {
           const n = countButtons(p.id);
           const where = p.channel_id ? `<#${p.channel_id}>` : 'non envoyé';
-          return `**#${p.id}** — ${truncate(p.title, 60)} (${n} bouton${n > 1 ? 's' : ''}, ${where})`;
+          const mode = p.display_mode === 'select' ? 'dropdown' : 'boutons';
+          return `**#${p.id}** — ${truncate(p.title, 60)} (${mode}, ${n} option${n > 1 ? 's' : ''}, ${where})`;
         })
         .join('\n'),
     );

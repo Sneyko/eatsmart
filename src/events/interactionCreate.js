@@ -20,7 +20,11 @@ import {
   handlePanelButtonClick,
   reopenTicket,
 } from '../handlers/tickets.js';
-import { handleCreateModal, handleQuestionsModal } from '../commands/panel.js';
+import {
+  handleCreateModal,
+  handlePlaceholdersModal,
+  handleQuestionsModal,
+} from '../commands/panel.js';
 
 export const name = Events.InteractionCreate;
 
@@ -37,6 +41,9 @@ export async function execute(interaction) {
     }
     if (interaction.isButton()) {
       return routeButton(interaction);
+    }
+    if (interaction.isStringSelectMenu()) {
+      return routeSelect(interaction);
     }
     if (interaction.isModalSubmit()) {
       return routeModal(interaction);
@@ -100,10 +107,19 @@ async function routeButton(interaction) {
   }
 }
 
+async function routeSelect(interaction) {
+  const id = interaction.customId;
+  if (id.startsWith('panel:select:')) {
+    const buttonId = interaction.values[0];
+    return handlePanelButtonClick(interaction, buttonId);
+  }
+}
+
 async function routeModal(interaction) {
   const id = interaction.customId;
-  if (id === 'panel:create') return handleCreateModal(interaction);
+  if (id.startsWith('panel:create')) return handleCreateModal(interaction);
   if (id === 'panel:questions') return handleQuestionsModal(interaction);
+  if (id === 'panel:placeholders') return handlePlaceholdersModal(interaction);
   if (id.startsWith('panel:answers:')) {
     return handleAnswersModal(interaction, id.split(':')[2]);
   }

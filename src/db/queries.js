@@ -46,8 +46,8 @@ function prepare() {
   `);
 
   stmts.insertPanel = db.prepare(`
-    INSERT INTO panels (guild_id, title, description, color, image, thumbnail)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO panels (guild_id, title, description, color, image, thumbnail, display_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   stmts.getPanel = db.prepare(`SELECT * FROM panels WHERE id = ? AND guild_id = ?`);
   stmts.listPanels = db.prepare(`SELECT * FROM panels WHERE guild_id = ? ORDER BY id ASC`);
@@ -60,8 +60,8 @@ function prepare() {
     INSERT INTO panel_buttons
       (panel_id, label, emoji, style, category_id, support_role_ids, ping_role_id,
        mention_owner, name_template, open_message, questions, add_role_on_open,
-       remove_role_on_close, create_staff_thread, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       remove_role_on_close, create_staff_thread, position, description, placeholder_text)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmts.getButtons = db.prepare(
     `SELECT * FROM panel_buttons WHERE panel_id = ? ORDER BY position ASC, id ASC`,
@@ -202,6 +202,7 @@ export function createPanel(guildId, p) {
     p.color ?? 5793266,
     p.image ?? null,
     p.thumbnail ?? null,
+    p.display_mode ?? 'buttons',
   ).lastInsertRowid;
 }
 export const getPanel = (id, guildId) => prepare().getPanel.get(id, guildId);
@@ -227,6 +228,8 @@ export function addButton(panelId, b) {
     b.remove_role_on_close ?? null,
     b.create_staff_thread ?? 0,
     b.position ?? 0,
+    b.description ?? null,
+    b.placeholder_text ?? null,
   ).lastInsertRowid;
 }
 export const getButtons = (panelId) => prepare().getButtons.all(panelId);

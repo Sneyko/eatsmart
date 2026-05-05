@@ -45,6 +45,7 @@ export function initDb() {
       thumbnail TEXT,
       message_id TEXT,
       channel_id TEXT,
+      display_mode TEXT DEFAULT 'buttons',
       created_at INTEGER DEFAULT (strftime('%s','now'))
     );
 
@@ -65,6 +66,8 @@ export function initDb() {
       remove_role_on_close TEXT,
       create_staff_thread INTEGER DEFAULT 0,
       position INTEGER DEFAULT 0,
+      description TEXT,
+      placeholder_text TEXT,
       FOREIGN KEY (panel_id) REFERENCES panels(id) ON DELETE CASCADE
     );
 
@@ -122,6 +125,11 @@ export function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_staff_actions_guild ON staff_actions(guild_id, created_at);
   `);
+
+  // Migrations idempotentes (no-op si la colonne existe déjà).
+  try { db.exec(`ALTER TABLE panels ADD COLUMN display_mode TEXT DEFAULT 'buttons'`); } catch {}
+  try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN description TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN placeholder_text TEXT`); } catch {}
 
   logger.info({ path: config.dbPath }, 'Database initialised');
   return db;
