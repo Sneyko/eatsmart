@@ -1,4 +1,4 @@
-import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import {
   createMacro,
   deleteMacro,
@@ -8,6 +8,7 @@ import {
   listMacros,
   updateMacro,
 } from '../db/queries.js';
+import { isAdmin, isStaff } from '../utils/permissions.js';
 import { errorEmbed, infoEmbed, successEmbed } from '../utils/embeds.js';
 import { truncate } from '../utils/validators.js';
 
@@ -59,9 +60,6 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-const ADMIN_PERMS = PermissionFlagsBits.ManageGuild;
-const isAdmin = (m) => m?.permissions?.has(ADMIN_PERMS);
-
 /**
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
  */
@@ -72,7 +70,16 @@ export async function execute(interaction) {
       ephemeral: true,
     });
   }
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({ embeds: [errorEmbed('Réservé au staff.')], ephemeral: true });
+  }
   const sub = interaction.options.getSubcommand();
+  if (['create', 'edit', 'delete'].includes(sub) && !isAdmin(interaction.member)) {
+    return interaction.reply({
+      embeds: [errorEmbed('Seuls les admins peuvent gérer les macros.')],
+      ephemeral: true,
+    });
+  }
   if (sub === 'create') return createCmd(interaction);
   if (sub === 'edit') return editCmd(interaction);
   if (sub === 'delete') return deleteCmd(interaction);
@@ -81,9 +88,6 @@ export async function execute(interaction) {
 }
 
 async function createCmd(interaction) {
-  if (!isAdmin(interaction.member)) {
-    return interaction.reply({ embeds: [errorEmbed('Permission Manage Guild requise.')], ephemeral: true });
-  }
   const name = interaction.options.getString('name', true).trim();
   const content = interaction.options.getString('content', true);
   if (!NAME_RE.test(name)) {
@@ -106,9 +110,6 @@ async function createCmd(interaction) {
 }
 
 async function editCmd(interaction) {
-  if (!isAdmin(interaction.member)) {
-    return interaction.reply({ embeds: [errorEmbed('Permission Manage Guild requise.')], ephemeral: true });
-  }
   const name = interaction.options.getString('name', true).trim();
   const content = interaction.options.getString('content', true);
   if (!NAME_RE.test(name)) {
@@ -131,9 +132,6 @@ async function editCmd(interaction) {
 }
 
 async function deleteCmd(interaction) {
-  if (!isAdmin(interaction.member)) {
-    return interaction.reply({ embeds: [errorEmbed('Permission Manage Guild requise.')], ephemeral: true });
-  }
   const name = interaction.options.getString('name', true).trim();
   const result = deleteMacro(interaction.guild.id, name);
   if (result.changes === 0) {

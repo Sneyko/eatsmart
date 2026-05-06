@@ -17,6 +17,7 @@ import {
   updateOrderState,
 } from '../db/queries.js';
 import { closeTicket } from './tickets.js';
+import { syncLoyaltyRole } from './loyalty.js';
 
 /**
  * Construit la rangée d'actions cuistot. Le rendu est public mais les
@@ -318,6 +319,10 @@ export async function handleValidateClose(interaction) {
     incrementUserOrderCount(interaction.guild.id, ticket.owner_id, 'client');
     if (ticket.claimed_by) {
       incrementUserOrderCount(interaction.guild.id, ticket.claimed_by, 'cuistot');
+    }
+    syncLoyaltyRole(interaction.guild, ticket.owner_id, 'client').catch(() => {});
+    if (ticket.claimed_by) {
+      syncLoyaltyRole(interaction.guild, ticket.claimed_by, 'cuistot').catch(() => {});
     }
   }
 
