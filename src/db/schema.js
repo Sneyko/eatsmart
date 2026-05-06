@@ -142,6 +142,7 @@ export function initDb() {
   try { db.exec(`ALTER TABLE panels ADD COLUMN display_mode TEXT DEFAULT 'buttons'`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN description TEXT`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN placeholder_text TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN claimed_category_id TEXT`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_max_tickets INTEGER DEFAULT 0`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_window_minutes INTEGER DEFAULT 60`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER`); } catch {}
