@@ -65,6 +65,11 @@ export const data = new SlashCommandBuilder()
           .setDescription('Fenêtre de cooldown en minutes (default 60)')
           .setMinValue(5)
           .setMaxValue(1440),
+      )
+      .addBooleanOption((o) =>
+        o
+          .setName('log_messages')
+          .setDescription('Logger chaque message des tickets dans le log channel'),
       ),
   )
   .addSubcommand((s) =>
@@ -109,6 +114,7 @@ export async function execute(interaction) {
     const autoclose = interaction.options.getInteger('autoclose_hours');
     const cooldownMax = interaction.options.getInteger('cooldown_max');
     const cooldownWindow = interaction.options.getInteger('cooldown_window_min');
+    const logMessages = interaction.options.getBoolean('log_messages');
 
     updateTicketsConfig(interaction.guild.id, {
       ticket_category_id: category?.id ?? null,
@@ -119,6 +125,7 @@ export async function execute(interaction) {
       autoclose_hours: autoclose ?? null,
       cooldown_max_tickets: cooldownMax ?? null,
       cooldown_window_minutes: cooldownWindow ?? null,
+      log_messages: logMessages === null ? null : logMessages ? 1 : 0,
     });
     invalidateGuildConfig(interaction.guild.id);
     return interaction.reply({

@@ -68,19 +68,19 @@ export function ticketActionRow() {
   const userRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:close')
-      .setLabel('Close')
+      .setLabel('Fermer')
       .setEmoji('🔒')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('ticket:close-reason')
-      .setLabel('Close with reason')
+      .setLabel('Fermer avec raison')
       .setEmoji('📝')
       .setStyle(ButtonStyle.Secondary),
   );
   const staffRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:claim')
-      .setLabel('Staff : Claim')
+      .setLabel('Prendre en charge')
       .setEmoji('🛡️')
       .setStyle(ButtonStyle.Primary),
   );
@@ -94,12 +94,12 @@ export function closedActionRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:reopen')
-      .setLabel('Reopen')
+      .setLabel('Rouvrir')
       .setEmoji('🔓')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId('ticket:delete')
-      .setLabel('Delete')
+      .setLabel('Supprimer')
       .setEmoji('🗑️')
       .setStyle(ButtonStyle.Danger),
   );
@@ -413,9 +413,14 @@ async function openTicket(interaction, button, answers) {
     embeds.push(answersEmbed);
   }
 
+  let pingRoleId = button.ping_role_id;
+  if (!pingRoleId && supportRoles.length > 0) {
+    pingRoleId = supportRoles[0];
+  }
+
   const mentions = [];
   if (button.mention_owner) mentions.push(`<@${member.id}>`);
-  if (button.ping_role_id) mentions.push(`<@&${button.ping_role_id}>`);
+  if (pingRoleId) mentions.push(`<@&${pingRoleId}>`);
 
   await channel.send({
     content: mentions.join(' ') || undefined,
@@ -423,7 +428,7 @@ async function openTicket(interaction, button, answers) {
     components: ticketActionRow(),
     allowedMentions: {
       users: button.mention_owner ? [member.id] : [],
-      roles: button.ping_role_id ? [button.ping_role_id] : [],
+      roles: pingRoleId ? [pingRoleId] : [],
     },
   });
 
@@ -793,19 +798,53 @@ export async function changeOwner(interaction, user) {
 }
 
 /**
- * Touch ticket activity + premier temps de réponse staff.
+ * Touch ticket activity + premier temps de réponse staff + log
+ * (optionnel) du message dans le log channel.
  * @param {import('discord.js').Message} message
  */
 export async function recordMessage(message) {
   const ticket = getTicketByChannel(message.channel.id);
   if (!ticket || ticket.status !== 'open') return;
   touchTicket(message.channel.id);
-  if (message.author.id === ticket.owner_id || message.author.bot) return;
-  const member =
-    message.member ??
-    (await message.guild.members.fetch(message.author.id).catch(() => null));
-  if (member && isStaff(member)) {
-    setFirstResponse(ticket.id);
+
+  const isOwner = message.author.id === ticket.owner_id;
+  let member = null;
+  if (!message.author.bot && !isOwner) {
+    member =
+      message.member ??
+      (await message.guild.members.fetch(message.author.id).catch(() => null));
+    if (member && isStaff(member)) {
+      setFirstResponse(ticket.id);
+    }
+  }
+
+  const cfg = getCachedGuildConfig(message.guild.id);
+  if (!cfg.log_messages || !cfg.log_channel_id || message.author.bot) return;
+
+  try {
+    const logCh = await message.guild.channels.fetch(cfg.log_channel_id).catch(() => null);
+    if (!logCh?.isTextBased()) return;
+    const embed = new EmbedBuilder()
+      .setColor(isOwner ? 0x5865f2 : 0x57f287)
+      .setAuthor({
+        name: `${message.author.username}${isOwner ? ' (client)' : ' (staff)'}`,
+        iconURL: message.author.displayAvatarURL(),
+      })
+      .setDescription(truncate(message.content || '*(message vide ou pièce jointe)*', 1900))
+      .setFooter({ text: `Ticket #${ticket.number} · #${message.channel.name}` })
+      .setTimestamp(message.createdAt);
+    if (message.attachments.size > 0) {
+      embed.addFields({
+        name: 'Pièces jointes',
+        value: message.attachments
+          .map((a) => `[${a.name}](${a.url})`)
+          .join('\n')
+          .slice(0, 1024),
+      });
+    }
+    await logCh.send({ embeds: [embed] });
+  } catch (err) {
+    logger.debug({ err }, 'Message log failed');
   }
 }
 

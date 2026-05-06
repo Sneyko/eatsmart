@@ -25,7 +25,8 @@ function prepare() {
       max_open_per_user = COALESCE(?, max_open_per_user),
       autoclose_hours = COALESCE(?, autoclose_hours),
       cooldown_max_tickets = COALESCE(?, cooldown_max_tickets),
-      cooldown_window_minutes = COALESCE(?, cooldown_window_minutes)
+      cooldown_window_minutes = COALESCE(?, cooldown_window_minutes),
+      log_messages = COALESCE(?, log_messages)
     WHERE guild_id = ?
   `);
 
@@ -210,6 +211,7 @@ export function updateTicketsConfig(guildId, patch) {
     patch.autoclose_hours ?? null,
     patch.cooldown_max_tickets ?? null,
     patch.cooldown_window_minutes ?? null,
+    patch.log_messages ?? null,
     guildId,
   );
 }
