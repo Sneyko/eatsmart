@@ -1,4 +1,4 @@
-import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import {
   statsAvgRating,
   statsCount,
@@ -6,12 +6,12 @@ import {
   topOrderUsers,
 } from '../db/queries.js';
 import { errorEmbed } from '../utils/embeds.js';
+import { isStaff } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
   .setName('stats')
   .setDescription('Statistiques tickets du serveur')
-  .setDMPermission(false)
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+  .setDMPermission(false);
 
 /**
  * @param {import('discord.js').ChatInputCommandInteraction} interaction
@@ -20,6 +20,12 @@ export async function execute(interaction) {
   if (!interaction.guild) {
     return interaction.reply({
       embeds: [errorEmbed('Commande serveur uniquement.')],
+      ephemeral: true,
+    });
+  }
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({
+      embeds: [errorEmbed('Réservé au staff.')],
       ephemeral: true,
     });
   }

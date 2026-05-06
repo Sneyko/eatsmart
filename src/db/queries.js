@@ -163,6 +163,24 @@ function prepare() {
     ORDER BY count DESC LIMIT ?
   `);
 
+  stmts.upsertLoyaltyTier = db.prepare(`
+    INSERT INTO loyalty_tiers (guild_id, scope, tier_name, threshold, role_id, position)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(guild_id, scope, tier_name) DO UPDATE SET
+      threshold = excluded.threshold,
+      role_id = excluded.role_id,
+      position = excluded.position
+  `);
+  stmts.deleteLoyaltyTier = db.prepare(
+    `DELETE FROM loyalty_tiers WHERE guild_id = ? AND scope = ? AND tier_name = ?`,
+  );
+  stmts.listLoyaltyTiers = db.prepare(
+    `SELECT * FROM loyalty_tiers WHERE guild_id = ? AND scope = ? ORDER BY threshold ASC`,
+  );
+  stmts.listAllLoyaltyTiers = db.prepare(
+    `SELECT * FROM loyalty_tiers WHERE guild_id = ? ORDER BY scope, threshold ASC`,
+  );
+
   stmts.insertMacro = db.prepare(`
     INSERT INTO macros (guild_id, name, content, created_by) VALUES (?, ?, ?, ?)
   `);
@@ -418,6 +436,14 @@ export const getUserOrderCount = (guildId, userId, role) =>
   prepare().getUserOrderCount.get(guildId, userId, role)?.count ?? 0;
 export const topOrderUsers = (guildId, role, limit = 10) =>
   prepare().topOrderUsers.all(guildId, role, limit);
+
+export const upsertLoyaltyTier = (guildId, scope, tierName, threshold, roleId, position) =>
+  prepare().upsertLoyaltyTier.run(guildId, scope, tierName, threshold, roleId, position);
+export const deleteLoyaltyTier = (guildId, scope, tierName) =>
+  prepare().deleteLoyaltyTier.run(guildId, scope, tierName);
+export const listLoyaltyTiers = (guildId, scope) =>
+  prepare().listLoyaltyTiers.all(guildId, scope);
+export const listAllLoyaltyTiers = (guildId) => prepare().listAllLoyaltyTiers.all(guildId);
 
 export const statsCount = (guildId) => prepare().statsCount.get(guildId);
 export const statsTopStaff = (guildId) => prepare().statsTopStaff.all(guildId);

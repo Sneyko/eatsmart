@@ -146,6 +146,17 @@ export function initDb() {
       PRIMARY KEY (guild_id, user_id, role)
     );
     CREATE INDEX IF NOT EXISTS idx_order_counts_role ON user_order_counts(guild_id, role, count DESC);
+
+    CREATE TABLE IF NOT EXISTS loyalty_tiers (
+      guild_id TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      tier_name TEXT NOT NULL,
+      threshold INTEGER NOT NULL,
+      role_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      PRIMARY KEY (guild_id, scope, tier_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_loyalty_tiers_lookup ON loyalty_tiers(guild_id, scope, threshold DESC);
   `);
 
   // Migrations idempotentes (no-op si la colonne existe déjà).
