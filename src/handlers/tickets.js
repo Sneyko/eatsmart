@@ -567,7 +567,11 @@ export async function closeTicket(client, ticket, { actorId, reason = null, sile
     const dmEmbed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setTitle(`Ton ticket #${ticket.number} a été fermé`)
-      .setDescription(reason ? `Raison : ${truncate(reason, 1024)}` : 'Merci pour ton passage !');
+      .setDescription(
+        `Merci pour ton passage ! 🙏\n\n` +
+          (reason ? `**Raison de fermeture :** ${truncate(reason, 1024)}\n\n` : '') +
+          `📊 **Comment s'est passé ton ticket ?** Note ton expérience ci-dessous.`,
+      );
     const ratingRow = new ActionRowBuilder().addComponents(
       ...[1, 2, 3, 4, 5].map((n) =>
         new ButtonBuilder()
@@ -576,8 +580,7 @@ export async function closeTicket(client, ticket, { actorId, reason = null, sile
           .setStyle(ButtonStyle.Secondary),
       ),
     );
-    const files = transcript ? [cloneAttachment(transcript)] : [];
-    await owner.send({ embeds: [dmEmbed], components: [ratingRow], files });
+    await owner.send({ embeds: [dmEmbed], components: [ratingRow] });
   } catch (err) {
     logger.debug({ err }, 'Could not DM ticket owner');
   }
