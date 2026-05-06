@@ -698,6 +698,15 @@ export async function claimTicket(interaction) {
   await interaction.reply({
     embeds: [successEmbed(`Ticket claim par <@${interaction.user.id}>.`)],
   });
+
+  try {
+    const { initOrderOnClaim } = await import('./orders.js');
+    const fresh = getTicketByChannel(interaction.channel.id);
+    if (fresh) await initOrderOnClaim(interaction.channel, fresh, interaction.user.id);
+  } catch (err) {
+    logger.warn({ err }, 'initOrderOnClaim failed');
+  }
+
   await sendLog(
     interaction.guild,
     new EmbedBuilder()

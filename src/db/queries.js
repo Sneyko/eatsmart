@@ -135,6 +135,34 @@ function prepare() {
       AND opened_at > strftime('%s','now') - ?
   `);
 
+  stmts.updateOrderState = db.prepare(`
+    UPDATE tickets SET
+      order_state = ?,
+      order_price = COALESCE(?, order_price),
+      order_tracking = COALESCE(?, order_tracking),
+      order_status_message_id = COALESCE(?, order_status_message_id),
+      order_cancel_reason = COALESCE(?, order_cancel_reason)
+    WHERE id = ?
+  `);
+
+  stmts.incrementUserOrderCount = db.prepare(`
+    INSERT INTO user_order_counts (guild_id, user_id, role, count, updated_at)
+    VALUES (?, ?, ?, 1, strftime('%s','now'))
+    ON CONFLICT(guild_id, user_id, role) DO UPDATE SET
+      count = count + 1,
+      updated_at = strftime('%s','now')
+  `);
+
+  stmts.getUserOrderCount = db.prepare(`
+    SELECT count FROM user_order_counts WHERE guild_id = ? AND user_id = ? AND role = ?
+  `);
+
+  stmts.topOrderUsers = db.prepare(`
+    SELECT user_id, count FROM user_order_counts
+    WHERE guild_id = ? AND role = ?
+    ORDER BY count DESC LIMIT ?
+  `);
+
   stmts.insertMacro = db.prepare(`
     INSERT INTO macros (guild_id, name, content, created_by) VALUES (?, ?, ?, ?)
   `);
@@ -373,6 +401,23 @@ export const deleteMacro = (guildId, name) => prepare().deleteMacro.run(guildId,
 export const updateMacro = (guildId, name, content) =>
   prepare().updateMacro.run(content, guildId, name);
 export const incrementMacroUses = (id) => prepare().incrementMacroUses.run(id);
+
+export function updateOrderState(ticketId, patch) {
+  return prepare().updateOrderState.run(
+    patch.order_state,
+    patch.order_price ?? null,
+    patch.order_tracking ?? null,
+    patch.order_status_message_id ?? null,
+    patch.order_cancel_reason ?? null,
+    ticketId,
+  );
+}
+export const incrementUserOrderCount = (guildId, userId, role) =>
+  prepare().incrementUserOrderCount.run(guildId, userId, role);
+export const getUserOrderCount = (guildId, userId, role) =>
+  prepare().getUserOrderCount.get(guildId, userId, role)?.count ?? 0;
+export const topOrderUsers = (guildId, role, limit = 10) =>
+  prepare().topOrderUsers.all(guildId, role, limit);
 
 export const statsCount = (guildId) => prepare().statsCount.get(guildId);
 export const statsTopStaff = (guildId) => prepare().statsTopStaff.all(guildId);

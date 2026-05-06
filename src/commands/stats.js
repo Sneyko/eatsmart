@@ -1,5 +1,10 @@
 import { EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
-import { statsAvgRating, statsCount, statsTopStaff } from '../db/queries.js';
+import {
+  statsAvgRating,
+  statsCount,
+  statsTopStaff,
+  topOrderUsers,
+} from '../db/queries.js';
 import { errorEmbed } from '../utils/embeds.js';
 
 export const data = new SlashCommandBuilder()
@@ -26,6 +31,9 @@ export async function execute(interaction) {
     ? `${Math.round(counts.avg_response / 60)} min`
     : 'N/A';
 
+  const topClients = topOrderUsers(interaction.guild.id, 'client', 5);
+  const topCuistots = topOrderUsers(interaction.guild.id, 'cuistot', 5);
+
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('Statistiques tickets')
@@ -40,6 +48,18 @@ export async function execute(interaction) {
       {
         name: 'Note moyenne',
         value: fb.n ? `${(fb.avg_rating || 0).toFixed(2)} / 5 (${fb.n} avis)` : '—',
+      },
+      {
+        name: '🏆 Top clients (commandes terminées)',
+        value: topClients.length
+          ? topClients.map((u, i) => `${i + 1}. <@${u.user_id}> — ${u.count}`).join('\n')
+          : '—',
+      },
+      {
+        name: '👨‍🍳 Top cuistots',
+        value: topCuistots.length
+          ? topCuistots.map((u, i) => `${i + 1}. <@${u.user_id}> — ${u.count}`).join('\n')
+          : '—',
       },
     )
     .setTimestamp();

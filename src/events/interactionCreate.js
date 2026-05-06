@@ -26,6 +26,14 @@ import {
   handlePlaceholdersModal,
   handleQuestionsModal,
 } from '../commands/panel.js';
+import {
+  handleCancelOrder,
+  handleCancelOrderModal,
+  handleCompleteOrder,
+  handleSendOrder,
+  handleSendOrderModal,
+  handleValidateClose,
+} from '../handlers/orders.js';
 
 export const name = Events.InteractionCreate;
 
@@ -106,6 +114,10 @@ async function routeButton(interaction) {
     const [, , ticketId, rating] = id.split(':');
     return handleFeedbackRate(interaction, ticketId, Number(rating));
   }
+  if (id === 'order:send') return handleSendOrder(interaction);
+  if (id === 'order:complete') return handleCompleteOrder(interaction);
+  if (id === 'order:cancel') return handleCancelOrder(interaction);
+  if (id === 'order:validate-close') return handleValidateClose(interaction);
 }
 
 async function routeSelect(interaction) {
@@ -134,4 +146,6 @@ async function routeModal(interaction) {
   if (id.startsWith('fb:comment:')) {
     return handleFeedbackComment(interaction, id.split(':')[2]);
   }
+  if (id === 'order:send-modal') return handleSendOrderModal(interaction);
+  if (id === 'order:cancel-modal') return handleCancelOrderModal(interaction);
 }
