@@ -43,6 +43,9 @@ export const data = new SlashCommandBuilder()
           .setName('button_label')
           .setDescription('Texte du bouton (défaut : "J\'accepte le règlement")')
           .setMaxLength(80),
+      )
+      .addStringOption((o) =>
+        o.setName('emoji').setDescription('Emoji custom (format <:nom:id>) ou unicode'),
       ),
   );
 
@@ -82,14 +85,25 @@ async function configCmd(interaction) {
 async function sendCmd(interaction) {
   const channel = interaction.options.getChannel('channel', true);
   const label = interaction.options.getString('button_label') || "J'accepte le règlement";
+  const emoji = interaction.options.getString('emoji') || '✅';
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('rules:accept')
-      .setLabel(label)
-      .setEmoji('✅')
-      .setStyle(ButtonStyle.Success),
-  );
+  const button = new ButtonBuilder()
+    .setCustomId('rules:accept')
+    .setLabel(label)
+    .setStyle(ButtonStyle.Success);
+  try {
+    button.setEmoji(emoji);
+  } catch {
+    return interaction.reply({
+      embeds: [
+        errorEmbed(
+          `Emoji invalide : "${emoji}". Utilise un emoji unicode ou le format \`<:nom:id>\`.`,
+        ),
+      ],
+      ephemeral: true,
+    });
+  }
+  const row = new ActionRowBuilder().addComponents(button);
 
   await channel.send({ components: [row] });
   return interaction.reply({
