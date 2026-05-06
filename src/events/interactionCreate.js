@@ -34,6 +34,7 @@ import {
   handleSendOrderModal,
   handleValidateClose,
 } from '../handlers/orders.js';
+import { handleAcceptRules } from '../handlers/rules.js';
 
 export const name = Events.InteractionCreate;
 
@@ -118,6 +119,7 @@ async function routeButton(interaction) {
   if (id === 'order:complete') return handleCompleteOrder(interaction);
   if (id === 'order:cancel') return handleCancelOrder(interaction);
   if (id === 'order:validate-close') return handleValidateClose(interaction);
+  if (id === 'rules:accept') return handleAcceptRules(interaction);
 }
 
 async function routeSelect(interaction) {

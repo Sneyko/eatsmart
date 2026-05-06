@@ -167,6 +167,7 @@ export function initDb() {
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_max_tickets INTEGER DEFAULT 0`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_window_minutes INTEGER DEFAULT 60`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN log_messages INTEGER DEFAULT 0`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN rules_role_id TEXT`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_state TEXT DEFAULT 'none'`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_price TEXT`); } catch {}
