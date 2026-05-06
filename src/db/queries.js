@@ -48,6 +48,10 @@ function prepare() {
     RETURNING ticket_counter
   `);
 
+  stmts.updateRulesConfig = db.prepare(
+    `UPDATE guild_config SET rules_role_id = COALESCE(?, rules_role_id) WHERE guild_id = ?`,
+  );
+
   stmts.insertPanel = db.prepare(`
     INSERT INTO panels (guild_id, title, description, color, image, thumbnail, display_mode)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -260,6 +264,12 @@ export function updateTicketsConfig(guildId, patch) {
     patch.log_messages ?? null,
     guildId,
   );
+}
+
+export function updateRulesConfig(guildId, roleId) {
+  const s = prepare();
+  s.upsertGuildConfig.run(guildId);
+  s.updateRulesConfig.run(roleId, guildId);
 }
 
 export function updateWelcomeConfig(guildId, patch) {
