@@ -70,6 +70,24 @@ function prepare() {
   );
   stmts.getButton = db.prepare(`SELECT * FROM panel_buttons WHERE id = ?`);
   stmts.deleteButton = db.prepare(`DELETE FROM panel_buttons WHERE id = ?`);
+  stmts.updateButton = db.prepare(`
+    UPDATE panel_buttons SET
+      label = COALESCE(?, label),
+      emoji = COALESCE(?, emoji),
+      style = COALESCE(?, style),
+      category_id = COALESCE(?, category_id),
+      support_role_ids = COALESCE(?, support_role_ids),
+      ping_role_id = COALESCE(?, ping_role_id),
+      mention_owner = COALESCE(?, mention_owner),
+      name_template = COALESCE(?, name_template),
+      open_message = COALESCE(?, open_message),
+      add_role_on_open = COALESCE(?, add_role_on_open),
+      remove_role_on_close = COALESCE(?, remove_role_on_close),
+      create_staff_thread = COALESCE(?, create_staff_thread),
+      description = COALESCE(?, description),
+      placeholder_text = COALESCE(?, placeholder_text)
+    WHERE id = ?
+  `);
   stmts.countButtons = db.prepare(
     `SELECT COUNT(*) as c FROM panel_buttons WHERE panel_id = ?`,
   );
@@ -258,6 +276,45 @@ export const getButtons = (panelId) => prepare().getButtons.all(panelId);
 export const getButton = (id) => prepare().getButton.get(id);
 export const deleteButton = (id) => prepare().deleteButton.run(id);
 export const countButtons = (panelId) => prepare().countButtons.get(panelId).c;
+
+export function updateButton(id, patch) {
+  const s = prepare();
+  return s.updateButton.run(
+    patch.label ?? null,
+    patch.emoji ?? null,
+    patch.style ?? null,
+    patch.category_id ?? null,
+    patch.support_role_ids ?? null,
+    patch.ping_role_id ?? null,
+    patch.mention_owner ?? null,
+    patch.name_template ?? null,
+    patch.open_message ?? null,
+    patch.add_role_on_open ?? null,
+    patch.remove_role_on_close ?? null,
+    patch.create_staff_thread ?? null,
+    patch.description ?? null,
+    patch.placeholder_text ?? null,
+    id,
+  );
+}
+
+const CLEARABLE_BUTTON_FIELDS = new Set([
+  'emoji',
+  'category_id',
+  'ping_role_id',
+  'add_role_on_open',
+  'remove_role_on_close',
+  'open_message',
+  'description',
+  'placeholder_text',
+  'support_role_ids',
+]);
+
+export function clearButtonField(id, field) {
+  if (!CLEARABLE_BUTTON_FIELDS.has(field)) throw new Error('Invalid field for clear');
+  const stmt = getDb().prepare(`UPDATE panel_buttons SET ${field} = NULL WHERE id = ?`);
+  return stmt.run(id);
+}
 
 export function createTicket(t) {
   return prepare().insertTicket.run(
