@@ -658,6 +658,17 @@ export async function claimTicket(interaction) {
   setTicketClaimed(ticket.id, interaction.user.id);
   logAction(interaction.guild.id, ticket.id, interaction.user.id, 'claim');
 
+  if (ticket.button_id) {
+    const button = getButton(ticket.button_id);
+    if (button?.claimed_category_id) {
+      try {
+        await interaction.channel.setParent(button.claimed_category_id, { lockPermissions: false });
+      } catch (err) {
+        logger.warn({ err }, 'Could not move ticket to claimed category');
+      }
+    }
+  }
+
   const cfg = getCachedGuildConfig(interaction.guild.id);
   let supportRoles = [];
   try {

@@ -61,6 +61,12 @@ export const data = new SlashCommandBuilder()
           .setDescription('Catégorie où créer les tickets de ce bouton')
           .addChannelTypes(ChannelType.GuildCategory),
       )
+      .addChannelOption((o) =>
+        o
+          .setName('claimed_category')
+          .setDescription('Catégorie où le ticket est déplacé après /ticket claim (optionnel)')
+          .addChannelTypes(ChannelType.GuildCategory),
+      )
       .addRoleOption((o) => o.setName('support_role').setDescription('Rôle support dédié à cette catégorie'))
       .addRoleOption((o) => o.setName('ping_role').setDescription('Rôle pingé à l’ouverture'))
       .addRoleOption((o) => o.setName('add_role_on_open').setDescription('Rôle ajouté à l’owner à l’ouverture'))
@@ -122,6 +128,12 @@ export const data = new SlashCommandBuilder()
           .setDescription('Nouvelle catégorie de tickets')
           .addChannelTypes(ChannelType.GuildCategory),
       )
+      .addChannelOption((o) =>
+        o
+          .setName('claimed_category')
+          .setDescription('Catégorie après claim')
+          .addChannelTypes(ChannelType.GuildCategory),
+      )
       .addRoleOption((o) => o.setName('support_role').setDescription('Nouveau rôle support'))
       .addRoleOption((o) => o.setName('ping_role').setDescription("Nouveau rôle pingé à l'ouverture"))
       .addRoleOption((o) =>
@@ -156,6 +168,7 @@ export const data = new SlashCommandBuilder()
             { name: 'Description', value: 'description' },
             { name: 'Placeholder dropdown', value: 'placeholder_text' },
             { name: 'Rôles support', value: 'support_role_ids' },
+            { name: 'Catégorie après claim', value: 'claimed_category_id' },
           ),
       ),
   )
@@ -314,6 +327,7 @@ async function addButtonCmd(interaction) {
   const addRole = interaction.options.getRole('add_role_on_open');
   const removeRole = interaction.options.getRole('remove_role_on_close');
   const category = interaction.options.getChannel('category');
+  const claimedCategory = interaction.options.getChannel('claimed_category');
   const withQuestions = interaction.options.getBoolean('with_questions');
   const description = interaction.options.getString('description');
   const placeholder = interaction.options.getString('placeholder');
@@ -323,6 +337,7 @@ async function addButtonCmd(interaction) {
     emoji: interaction.options.getString('emoji'),
     style: Number(interaction.options.getString('style') || '1'),
     category_id: category?.id || null,
+    claimed_category_id: claimedCategory?.id || null,
     support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : '[]',
     ping_role_id: pingRole?.id || null,
     add_role_on_open: addRole?.id || null,
@@ -767,6 +782,7 @@ async function editButtonCmd(interaction) {
   const addRole = interaction.options.getRole('add_role_on_open');
   const removeRole = interaction.options.getRole('remove_role_on_close');
   const category = interaction.options.getChannel('category');
+  const claimedCategory = interaction.options.getChannel('claimed_category');
   const mentionOwner = interaction.options.getBoolean('mention_owner');
   const staffThread = interaction.options.getBoolean('staff_thread');
   const styleStr = interaction.options.getString('style');
@@ -776,6 +792,7 @@ async function editButtonCmd(interaction) {
     emoji: interaction.options.getString('emoji'),
     style: styleStr ? Number(styleStr) : null,
     category_id: category?.id ?? null,
+    claimed_category_id: claimedCategory?.id ?? null,
     support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : null,
     ping_role_id: pingRole?.id ?? null,
     add_role_on_open: addRole?.id ?? null,
@@ -795,6 +812,7 @@ async function editButtonCmd(interaction) {
   if (patch.emoji) changes.push(`emoji → ${patch.emoji}`);
   if (patch.style) changes.push(`style → ${patch.style}`);
   if (category) changes.push(`catégorie → <#${category.id}>`);
+  if (claimedCategory) changes.push(`claimed_category → <#${claimedCategory.id}>`);
   if (supportRole) changes.push(`support_role → <@&${supportRole.id}>`);
   if (pingRole) changes.push(`ping_role → <@&${pingRole.id}>`);
   if (addRole) changes.push(`add_role_on_open → <@&${addRole.id}>`);

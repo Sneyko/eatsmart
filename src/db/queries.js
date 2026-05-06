@@ -62,8 +62,9 @@ function prepare() {
     INSERT INTO panel_buttons
       (panel_id, label, emoji, style, category_id, support_role_ids, ping_role_id,
        mention_owner, name_template, open_message, questions, add_role_on_open,
-       remove_role_on_close, create_staff_thread, position, description, placeholder_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       remove_role_on_close, create_staff_thread, position, description, placeholder_text,
+       claimed_category_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmts.getButtons = db.prepare(
     `SELECT * FROM panel_buttons WHERE panel_id = ? ORDER BY position ASC, id ASC`,
@@ -85,7 +86,8 @@ function prepare() {
       remove_role_on_close = COALESCE(?, remove_role_on_close),
       create_staff_thread = COALESCE(?, create_staff_thread),
       description = COALESCE(?, description),
-      placeholder_text = COALESCE(?, placeholder_text)
+      placeholder_text = COALESCE(?, placeholder_text),
+      claimed_category_id = COALESCE(?, claimed_category_id)
     WHERE id = ?
   `);
   stmts.countButtons = db.prepare(
@@ -270,6 +272,7 @@ export function addButton(panelId, b) {
     b.position ?? 0,
     b.description ?? null,
     b.placeholder_text ?? null,
+    b.claimed_category_id ?? null,
   ).lastInsertRowid;
 }
 export const getButtons = (panelId) => prepare().getButtons.all(panelId);
@@ -294,6 +297,7 @@ export function updateButton(id, patch) {
     patch.create_staff_thread ?? null,
     patch.description ?? null,
     patch.placeholder_text ?? null,
+    patch.claimed_category_id ?? null,
     id,
   );
 }
@@ -308,6 +312,7 @@ const CLEARABLE_BUTTON_FIELDS = new Set([
   'description',
   'placeholder_text',
   'support_role_ids',
+  'claimed_category_id',
 ]);
 
 export function clearButtonField(id, field) {
