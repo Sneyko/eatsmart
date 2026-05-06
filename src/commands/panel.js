@@ -119,6 +119,14 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s.setName('import').setDescription('Importer un panel depuis un JSON (ouvre un modal)'),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('import_file')
+      .setDescription('Importer un panel depuis un fichier JSON joint')
+      .addAttachmentOption((o) =>
+        o.setName('file').setDescription('Fichier JSON exporté par /panel export').setRequired(true),
+      ),
   );
 
 /**
@@ -139,6 +147,7 @@ export async function execute(interaction) {
   if (sub === 'delete') return deleteCmd(interaction);
   if (sub === 'export') return exportCmd(interaction);
   if (sub === 'import') return openImportModal(interaction);
+  if (sub === 'import_file') return importFromAttachment(interaction);
 }
 
 async function openCreateModal(interaction) {
@@ -560,5 +569,101 @@ export async function handleImportModal(interaction) {
       ),
     ],
     ephemeral: true,
+  });
+}
+
+/**
+ * Variante de l'import qui lit le JSON depuis une pièce jointe (.json),
+ * pour contourner la limite de 4000 chars du modal.
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ */
+async function importFromAttachment(interaction) {
+  const attachment = interaction.options.getAttachment('file', true);
+  if (!attachment.name.toLowerCase().endsWith('.json')) {
+    return interaction.reply({
+      embeds: [errorEmbed("Le fichier doit avoir l'extension .json.")],
+      ephemeral: true,
+    });
+  }
+  if (attachment.size > 500 * 1024) {
+    return interaction.reply({
+      embeds: [errorEmbed('Fichier trop gros (max 500 KB).')],
+      ephemeral: true,
+    });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  let raw;
+  try {
+    const res = await fetch(attachment.url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    raw = await res.text();
+  } catch {
+    return interaction.editReply({ embeds: [errorEmbed('Impossible de télécharger le fichier.')] });
+  }
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return interaction.editReply({ embeds: [errorEmbed('JSON invalide.')] });
+  }
+  if (!data || typeof data !== 'object' || !data.panel || !Array.isArray(data.buttons)) {
+    return interaction.editReply({
+      embeds: [errorEmbed('Structure attendue : { panel: {...}, buttons: [...] }.')],
+    });
+  }
+  if (data.version && data.version !== 1) {
+    return interaction.editReply({
+      embeds: [errorEmbed(`Version d'export ${data.version} non supportée.`)],
+    });
+  }
+  if (data.buttons.length > 25) {
+    return interaction.editReply({ embeds: [errorEmbed('Trop de boutons (max 25).')] });
+  }
+
+  const panelId = createPanel(interaction.guild.id, {
+    title: truncate(data.panel.title || 'Panel importé', LIMITS.EMBED_TITLE),
+    description: data.panel.description ? truncate(data.panel.description, LIMITS.EMBED_DESCRIPTION) : null,
+    color: data.panel.color ?? 5793266,
+    image: data.panel.image ?? null,
+    thumbnail: data.panel.thumbnail ?? null,
+    display_mode: data.panel.display_mode === 'select' ? 'select' : 'buttons',
+  });
+
+  let imported = 0;
+  for (const b of data.buttons) {
+    try {
+      addButton(panelId, {
+        label: truncate(b.label || 'Option', LIMITS.BUTTON_LABEL),
+        emoji: b.emoji ?? null,
+        style: b.style ?? 1,
+        category_id: null,
+        support_role_ids: '[]',
+        ping_role_id: null,
+        mention_owner: b.mention_owner ?? 1,
+        name_template: b.name_template || 'ticket-{username}-{number}',
+        open_message: b.open_message ?? null,
+        questions: typeof b.questions === 'string' ? b.questions : JSON.stringify(b.questions || []),
+        add_role_on_open: null,
+        remove_role_on_close: null,
+        create_staff_thread: b.create_staff_thread ?? 0,
+        position: b.position ?? 0,
+        description: b.description ?? null,
+        placeholder_text: b.placeholder_text ?? null,
+      });
+      imported++;
+    } catch {}
+  }
+
+  return interaction.editReply({
+    embeds: [
+      successEmbed(
+        `Panel #${panelId} importé avec ${imported} bouton(s).\n\n` +
+          `⚠️ Reconfigure les éléments propres à ce serveur :\n` +
+          `• catégorie de tickets, rôles support, rôles ping, rôles add/remove\n\n` +
+          `Puis envoie-le : \`/panel send panel_id:${panelId} channel:#xxx\``,
+      ),
+    ],
   });
 }
