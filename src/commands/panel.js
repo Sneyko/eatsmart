@@ -11,12 +11,15 @@ import {
 } from 'discord.js';
 import {
   addButton,
+  clearButtonField,
   countButtons,
   createPanel,
   deletePanel,
+  getButton,
   getButtons,
   getPanel,
   listPanels,
+  updateButton,
   updatePanelMessage,
 } from '../db/queries.js';
 import { errorEmbed, successEmbed } from '../utils/embeds.js';
@@ -93,6 +96,71 @@ export const data = new SlashCommandBuilder()
   )
   .addSubcommand((s) =>
     s
+      .setName('editbutton')
+      .setDescription('Modifier un bouton existant (laisse les options vides pour ne pas changer)')
+      .addIntegerOption((o) =>
+        o.setName('button_id').setDescription('ID du bouton à éditer').setRequired(true),
+      )
+      .addStringOption((o) =>
+        o.setName('label').setDescription('Nouveau texte du bouton').setMaxLength(LIMITS.BUTTON_LABEL),
+      )
+      .addStringOption((o) => o.setName('emoji').setDescription('Nouvel emoji'))
+      .addStringOption((o) =>
+        o
+          .setName('style')
+          .setDescription('Nouveau style')
+          .addChoices(
+            { name: 'Primary (bleu)', value: '1' },
+            { name: 'Secondary (gris)', value: '2' },
+            { name: 'Success (vert)', value: '3' },
+            { name: 'Danger (rouge)', value: '4' },
+          ),
+      )
+      .addChannelOption((o) =>
+        o
+          .setName('category')
+          .setDescription('Nouvelle catégorie de tickets')
+          .addChannelTypes(ChannelType.GuildCategory),
+      )
+      .addRoleOption((o) => o.setName('support_role').setDescription('Nouveau rôle support'))
+      .addRoleOption((o) => o.setName('ping_role').setDescription("Nouveau rôle pingé à l'ouverture"))
+      .addRoleOption((o) =>
+        o.setName('add_role_on_open').setDescription("Rôle ajouté à l'owner à l'ouverture"),
+      )
+      .addRoleOption((o) =>
+        o.setName('remove_role_on_close').setDescription('Rôle retiré à la fermeture'),
+      )
+      .addStringOption((o) =>
+        o.setName('name_template').setDescription('Nouveau template de nom de channel'),
+      )
+      .addStringOption((o) => o.setName('open_message').setDescription("Nouveau message d'ouverture"))
+      .addStringOption((o) =>
+        o.setName('description').setDescription('Description (dropdown uniquement)').setMaxLength(100),
+      )
+      .addStringOption((o) =>
+        o.setName('placeholder_text').setDescription('Texte placeholder du dropdown').setMaxLength(150),
+      )
+      .addBooleanOption((o) => o.setName('mention_owner').setDescription("Mentionner l'owner à l'ouverture"))
+      .addBooleanOption((o) => o.setName('staff_thread').setDescription('Créer un thread privé staff'))
+      .addStringOption((o) =>
+        o
+          .setName('clear')
+          .setDescription('Vider un champ (mettre à NULL)')
+          .addChoices(
+            { name: 'Emoji', value: 'emoji' },
+            { name: 'Catégorie', value: 'category_id' },
+            { name: 'Rôle ping', value: 'ping_role_id' },
+            { name: "Rôle add à l'ouverture", value: 'add_role_on_open' },
+            { name: 'Rôle remove à la fermeture', value: 'remove_role_on_close' },
+            { name: "Message d'ouverture", value: 'open_message' },
+            { name: 'Description', value: 'description' },
+            { name: 'Placeholder dropdown', value: 'placeholder_text' },
+            { name: 'Rôles support', value: 'support_role_ids' },
+          ),
+      ),
+  )
+  .addSubcommand((s) =>
+    s
       .setName('send')
       .setDescription('Envoyer le panel dans un channel')
       .addIntegerOption((o) => o.setName('panel_id').setDescription('ID du panel').setRequired(true))
@@ -142,6 +210,7 @@ export async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
   if (sub === 'create') return openCreateModal(interaction);
   if (sub === 'addbutton') return addButtonCmd(interaction);
+  if (sub === 'editbutton') return editButtonCmd(interaction);
   if (sub === 'send') return sendPanel(interaction);
   if (sub === 'list') return listCmd(interaction);
   if (sub === 'delete') return deleteCmd(interaction);
@@ -665,5 +734,93 @@ async function importFromAttachment(interaction) {
           `Puis envoie-le : \`/panel send panel_id:${panelId} channel:#xxx\``,
       ),
     ],
+  });
+}
+
+/**
+ * Met à jour les paramètres d'un bouton existant.
+ * Les options omises laissent l'ancienne valeur intacte (COALESCE).
+ * Pour vider explicitement un champ, utiliser l'option `clear`.
+ * @param {import('discord.js').ChatInputCommandInteraction} interaction
+ */
+async function editButtonCmd(interaction) {
+  const buttonId = interaction.options.getInteger('button_id', true);
+  const button = getButton(buttonId);
+  if (!button) {
+    return interaction.reply({ embeds: [errorEmbed('Bouton introuvable.')], ephemeral: true });
+  }
+  const panel = getPanel(button.panel_id, interaction.guild.id);
+  if (!panel) {
+    return interaction.reply({
+      embeds: [errorEmbed('Bouton appartient à un autre serveur.')],
+      ephemeral: true,
+    });
+  }
+
+  const clearField = interaction.options.getString('clear');
+  if (clearField) {
+    clearButtonField(buttonId, clearField);
+  }
+
+  const supportRole = interaction.options.getRole('support_role');
+  const pingRole = interaction.options.getRole('ping_role');
+  const addRole = interaction.options.getRole('add_role_on_open');
+  const removeRole = interaction.options.getRole('remove_role_on_close');
+  const category = interaction.options.getChannel('category');
+  const mentionOwner = interaction.options.getBoolean('mention_owner');
+  const staffThread = interaction.options.getBoolean('staff_thread');
+  const styleStr = interaction.options.getString('style');
+
+  const patch = {
+    label: interaction.options.getString('label'),
+    emoji: interaction.options.getString('emoji'),
+    style: styleStr ? Number(styleStr) : null,
+    category_id: category?.id ?? null,
+    support_role_ids: supportRole ? JSON.stringify([supportRole.id]) : null,
+    ping_role_id: pingRole?.id ?? null,
+    add_role_on_open: addRole?.id ?? null,
+    remove_role_on_close: removeRole?.id ?? null,
+    mention_owner: mentionOwner === null ? null : mentionOwner ? 1 : 0,
+    name_template: interaction.options.getString('name_template'),
+    open_message: interaction.options.getString('open_message'),
+    description: interaction.options.getString('description'),
+    placeholder_text: interaction.options.getString('placeholder_text'),
+    create_staff_thread: staffThread === null ? null : staffThread ? 1 : 0,
+  };
+
+  updateButton(buttonId, patch);
+
+  const changes = [];
+  if (patch.label) changes.push(`label → ${patch.label}`);
+  if (patch.emoji) changes.push(`emoji → ${patch.emoji}`);
+  if (patch.style) changes.push(`style → ${patch.style}`);
+  if (category) changes.push(`catégorie → <#${category.id}>`);
+  if (supportRole) changes.push(`support_role → <@&${supportRole.id}>`);
+  if (pingRole) changes.push(`ping_role → <@&${pingRole.id}>`);
+  if (addRole) changes.push(`add_role_on_open → <@&${addRole.id}>`);
+  if (removeRole) changes.push(`remove_role_on_close → <@&${removeRole.id}>`);
+  if (patch.name_template) changes.push('name_template modifié');
+  if (patch.open_message) changes.push("open_message modifié");
+  if (patch.description) changes.push('description modifiée');
+  if (patch.placeholder_text) changes.push('placeholder_text modifié');
+  if (mentionOwner !== null) changes.push(`mention_owner → ${mentionOwner}`);
+  if (staffThread !== null) changes.push(`staff_thread → ${staffThread}`);
+  if (clearField) changes.push(`vidé : ${clearField}`);
+
+  if (changes.length === 0) {
+    return interaction.reply({
+      embeds: [errorEmbed('Aucune modification fournie.')],
+      ephemeral: true,
+    });
+  }
+
+  return interaction.reply({
+    embeds: [
+      successEmbed(
+        `Bouton #${buttonId} mis à jour :\n${changes.map((c) => `• ${c}`).join('\n')}\n\n` +
+          `⚠️ Si le panel est déjà envoyé, **renvoie-le** avec \`/panel send panel_id:${button.panel_id} channel:#xxx\` pour que les utilisateurs voient les changements visuels (label/emoji/style/description).`,
+      ),
+    ],
+    ephemeral: true,
   });
 }
