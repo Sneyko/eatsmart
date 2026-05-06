@@ -136,6 +136,16 @@ export function initDb() {
       UNIQUE(guild_id, name)
     );
     CREATE INDEX IF NOT EXISTS idx_macros_guild ON macros(guild_id);
+
+    CREATE TABLE IF NOT EXISTS user_order_counts (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      count INTEGER DEFAULT 0,
+      updated_at INTEGER DEFAULT (strftime('%s','now')),
+      PRIMARY KEY (guild_id, user_id, role)
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_counts_role ON user_order_counts(guild_id, role, count DESC);
   `);
 
   // Migrations idempotentes (no-op si la colonne existe déjà).
@@ -147,6 +157,11 @@ export function initDb() {
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_window_minutes INTEGER DEFAULT 60`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN log_messages INTEGER DEFAULT 0`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN order_state TEXT DEFAULT 'none'`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN order_price TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN order_tracking TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN order_status_message_id TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE tickets ADD COLUMN order_cancel_reason TEXT`); } catch {}
 
   logger.info({ path: config.dbPath }, 'Database initialised');
   return db;
