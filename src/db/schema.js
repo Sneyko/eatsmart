@@ -4,7 +4,7 @@ import { config, logger } from '../config.js';
 let db;
 
 /**
- * Initialise la connexion SQLite, active WAL et crée les tables si besoin.
+ * Initialise la connexion SQLite, active WAL et cree les tables si besoin.
  * @returns {Database.Database}
  */
 export function initDb() {
@@ -32,6 +32,10 @@ export function initDb() {
       welcome_image TEXT,
       welcome_thumbnail TEXT,
       welcome_role_id TEXT,
+      availability_channel_id TEXT,
+      availability_role_id TEXT,
+      availability_order_channel_id TEXT,
+      availability_order_link TEXT,
       created_at INTEGER DEFAULT (strftime('%s','now'))
     );
 
@@ -125,6 +129,18 @@ export function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_staff_actions_guild ON staff_actions(guild_id, created_at);
 
+    CREATE TABLE IF NOT EXISTS availability_posts (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      message TEXT,
+      created_at INTEGER DEFAULT (strftime('%s','now')),
+      updated_at INTEGER DEFAULT (strftime('%s','now')),
+      PRIMARY KEY (guild_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_availability_posts_guild ON availability_posts(guild_id);
+
     CREATE TABLE IF NOT EXISTS macros (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       guild_id TEXT NOT NULL,
@@ -159,7 +175,7 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_loyalty_tiers_lookup ON loyalty_tiers(guild_id, scope, threshold DESC);
   `);
 
-  // Migrations idempotentes (no-op si la colonne existe déjà).
+  // Migrations idempotentes (no-op si la colonne existe deja).
   try { db.exec(`ALTER TABLE panels ADD COLUMN display_mode TEXT DEFAULT 'buttons'`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN description TEXT`); } catch {}
   try { db.exec(`ALTER TABLE panel_buttons ADD COLUMN placeholder_text TEXT`); } catch {}
@@ -168,6 +184,10 @@ export function initDb() {
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN cooldown_window_minutes INTEGER DEFAULT 60`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN log_messages INTEGER DEFAULT 0`); } catch {}
   try { db.exec(`ALTER TABLE guild_config ADD COLUMN rules_role_id TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN availability_channel_id TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN availability_role_id TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN availability_order_channel_id TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE guild_config ADD COLUMN availability_order_link TEXT`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_state TEXT DEFAULT 'none'`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_price TEXT`); } catch {}
@@ -180,7 +200,7 @@ export function initDb() {
 }
 
 /**
- * Récupère la connexion DB déjà initialisée.
+ * Recupere la connexion DB deja initialisee.
  * @returns {Database.Database}
  */
 export function getDb() {
