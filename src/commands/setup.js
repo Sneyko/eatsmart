@@ -3,6 +3,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from 'discord.js';
+import { updateAvailabilityConfig } from '../db/availability.js';
 import { ensureGuildConfig, updateTicketsConfig, updateWelcomeConfig } from '../db/queries.js';
 import { invalidateGuildConfig } from '../utils/cache.js';
 import { errorEmbed, successEmbed } from '../utils/embeds.js';
@@ -10,17 +11,17 @@ import { parseColor, truncate, LIMITS } from '../utils/validators.js';
 
 export const data = new SlashCommandBuilder()
   .setName('setup')
-  .setDescription('Configurer le bot (welcome, tickets)')
+  .setDescription('Configurer le bot (welcome, tickets, dispo)')
   .setDMPermission(false)
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('tickets')
-      .setDescription('Configurer le système de tickets')
+      .setDescription('Configurer le systeme de tickets')
       .addChannelOption((o) =>
         o
           .setName('category')
-          .setDescription('Catégorie où créer les tickets')
+          .setDescription('Categorie ou creer les tickets')
           .addChannelTypes(ChannelType.GuildCategory),
       )
       .addChannelOption((o) =>
@@ -32,37 +33,37 @@ export const data = new SlashCommandBuilder()
       .addChannelOption((o) =>
         o
           .setName('transcript_channel')
-          .setDescription('Channel où poster les transcripts')
+          .setDescription('Channel ou poster les transcripts')
           .addChannelTypes(ChannelType.GuildText),
       )
       .addRoleOption((o) =>
-        o.setName('support_role').setDescription('Rôle staff principal (un seul, pour la base)'),
+        o.setName('support_role').setDescription('Role staff principal (un seul, pour la base)'),
       )
       .addIntegerOption((o) =>
         o
           .setName('max_open_per_user')
-          .setDescription('Tickets simultanés max par user (0 = illimité)')
+          .setDescription('Tickets simultanes max par user (0 = illimite)')
           .setMinValue(0)
           .setMaxValue(20),
       )
       .addIntegerOption((o) =>
         o
           .setName('autoclose_hours')
-          .setDescription("Auto-close après X heures d'inactivité (0 = off)")
+          .setDescription("Auto-close apres X heures d'inactivite (0 = off)")
           .setMinValue(0)
           .setMaxValue(720),
       )
       .addIntegerOption((o) =>
         o
           .setName('cooldown_max')
-          .setDescription('Max tickets ouverts par user dans la fenêtre (0 = off)')
+          .setDescription('Max tickets ouverts par user dans la fenetre (0 = off)')
           .setMinValue(0)
           .setMaxValue(20),
       )
       .addIntegerOption((o) =>
         o
           .setName('cooldown_window_min')
-          .setDescription('Fenêtre de cooldown en minutes (default 60)')
+          .setDescription('Fenetre de cooldown en minutes (default 60)')
           .setMinValue(5)
           .setMaxValue(1440),
       )
@@ -90,7 +91,33 @@ export const data = new SlashCommandBuilder()
       .addStringOption((o) => o.setName('color').setDescription('Couleur hex (#5865F2)'))
       .addStringOption((o) => o.setName('image').setDescription('URL image (large)'))
       .addStringOption((o) => o.setName('thumbnail').setDescription('URL thumbnail'))
-      .addRoleOption((o) => o.setName('autorole').setDescription('Rôle ajouté auto au nouveau membre')),
+      .addRoleOption((o) => o.setName('autorole').setDescription('Role ajoute auto au nouveau membre')),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('dispo')
+      .setDescription('Configurer les disponibilites cuistot')
+      .addChannelOption((o) =>
+        o
+          .setName('channel')
+          .setDescription('Salon ou poster les cuistots disponibles')
+          .addChannelTypes(ChannelType.GuildText),
+      )
+      .addRoleOption((o) =>
+        o.setName('role').setDescription('Role autorise a utiliser /dispo'),
+      )
+      .addChannelOption((o) =>
+        o
+          .setName('order_channel')
+          .setDescription('Salon ouvert par le bouton Prendre commande')
+          .addChannelTypes(ChannelType.GuildText),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('order_link')
+          .setDescription('Lien Discord exact ouvert par le bouton (message ou salon)')
+          .setMaxLength(300),
+      ),
   );
 
 /**
@@ -129,7 +156,7 @@ export async function execute(interaction) {
     });
     invalidateGuildConfig(interaction.guild.id);
     return interaction.reply({
-      embeds: [successEmbed('Configuration tickets mise à jour.')],
+      embeds: [successEmbed('Configuration tickets mise a jour.')],
       ephemeral: true,
     });
   }
@@ -155,9 +182,63 @@ export async function execute(interaction) {
     });
     invalidateGuildConfig(interaction.guild.id);
     return interaction.reply({
-      embeds: [successEmbed('Configuration welcome mise à jour.')],
+      embeds: [successEmbed('Configuration welcome mise a jour.')],
+      ephemeral: true,
+    });
+  }
+  if (sub === 'dispo') {
+    const channel = interaction.options.getChannel('channel');
+    const role = interaction.options.getRole('role');
+    const orderChannel = interaction.options.getChannel('order_channel');
+    const orderLink = interaction.options.getString('order_link')?.trim() || null;
+
+    if (orderChannel && orderLink) {
+      return interaction.reply({
+        embeds: [errorEmbed('Choisis soit order_channel, soit order_link, pas les deux.')],
+        ephemeral: true,
+      });
+    }
+    if (orderLink && !isHttpUrl(orderLink)) {
+      return interaction.reply({
+        embeds: [errorEmbed('Le lien doit commencer par http:// ou https://.')],
+        ephemeral: true,
+      });
+    }
+
+    const patch = {};
+    if (channel) patch.availability_channel_id = channel.id;
+    if (role) patch.availability_role_id = role.id;
+    if (orderChannel) {
+      patch.availability_order_channel_id = orderChannel.id;
+      patch.availability_order_link = null;
+    }
+    if (orderLink) {
+      patch.availability_order_link = orderLink;
+      patch.availability_order_channel_id = null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return interaction.reply({
+        embeds: [errorEmbed('Indique au moins un salon, un role, ou une destination de commande.')],
+        ephemeral: true,
+      });
+    }
+
+    updateAvailabilityConfig(interaction.guild.id, patch);
+    invalidateGuildConfig(interaction.guild.id);
+    return interaction.reply({
+      embeds: [successEmbed('Configuration dispo mise a jour.')],
       ephemeral: true,
     });
   }
   return interaction.reply({ embeds: [errorEmbed('Sous-commande inconnue.')], ephemeral: true });
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
