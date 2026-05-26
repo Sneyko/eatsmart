@@ -35,6 +35,10 @@ import {
   handleValidateClose,
 } from '../handlers/orders.js';
 import { handleAcceptRules } from '../handlers/rules.js';
+import {
+  handleAddressGeneratorButton,
+  handleAddressGeneratorModal,
+} from '../handlers/addressGenerator.js';
 
 export const name = Events.InteractionCreate;
 
@@ -120,6 +124,7 @@ async function routeButton(interaction) {
   if (id === 'order:cancel') return handleCancelOrder(interaction);
   if (id === 'order:validate-close') return handleValidateClose(interaction);
   if (id === 'rules:accept') return handleAcceptRules(interaction);
+  if (id === 'address:open') return handleAddressGeneratorButton(interaction);
 }
 
 async function routeSelect(interaction) {
@@ -150,4 +155,5 @@ async function routeModal(interaction) {
   }
   if (id === 'order:send-modal') return handleSendOrderModal(interaction);
   if (id === 'order:cancel-modal') return handleCancelOrderModal(interaction);
+  if (id === 'address:generate') return handleAddressGeneratorModal(interaction);
 }
