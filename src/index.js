@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config, logger } from './config.js';
 import { initDb } from './db/schema.js';
+import { startDashboard } from './dashboard/server.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -45,8 +46,11 @@ for (const file of readdirSync(eventsDir).filter((f) => f.endsWith('.js'))) {
 process.on('unhandledRejection', (err) => logger.error({ err }, 'Unhandled rejection'));
 process.on('uncaughtException', (err) => logger.error({ err }, 'Uncaught exception'));
 
+const dashboardServer = startDashboard(client);
+
 const shutdown = (signal) => {
   logger.info({ signal }, 'Shutting down');
+  dashboardServer?.close?.();
   client.destroy();
   process.exit(0);
 };

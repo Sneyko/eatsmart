@@ -59,6 +59,17 @@ function prepare() {
   stmts.getPanel = db.prepare(`SELECT * FROM panels WHERE id = ? AND guild_id = ?`);
   stmts.listPanels = db.prepare(`SELECT * FROM panels WHERE guild_id = ? ORDER BY id ASC`);
   stmts.deletePanel = db.prepare(`DELETE FROM panels WHERE id = ? AND guild_id = ?`);
+  stmts.deletePanelsByGuild = db.prepare(`DELETE FROM panels WHERE guild_id = ?`);
+  stmts.updatePanel = db.prepare(`
+    UPDATE panels SET
+      title = ?,
+      description = ?,
+      color = ?,
+      image = ?,
+      thumbnail = ?,
+      display_mode = ?
+    WHERE id = ? AND guild_id = ?
+  `);
   stmts.updatePanelMessage = db.prepare(
     `UPDATE panels SET message_id = ?, channel_id = ? WHERE id = ?`,
   );
@@ -93,6 +104,27 @@ function prepare() {
       description = COALESCE(?, description),
       placeholder_text = COALESCE(?, placeholder_text),
       claimed_category_id = COALESCE(?, claimed_category_id)
+    WHERE id = ?
+  `);
+  stmts.replaceButton = db.prepare(`
+    UPDATE panel_buttons SET
+      label = ?,
+      emoji = ?,
+      style = ?,
+      category_id = ?,
+      support_role_ids = ?,
+      ping_role_id = ?,
+      mention_owner = ?,
+      name_template = ?,
+      open_message = ?,
+      questions = ?,
+      add_role_on_open = ?,
+      remove_role_on_close = ?,
+      create_staff_thread = ?,
+      position = ?,
+      description = ?,
+      placeholder_text = ?,
+      claimed_category_id = ?
     WHERE id = ?
   `);
   stmts.countButtons = db.prepare(
@@ -232,6 +264,11 @@ function prepare() {
   stmts.statsAvgRating = db.prepare(`
     SELECT AVG(rating) AS avg_rating, COUNT(*) AS n FROM feedback WHERE guild_id = ?
   `);
+  stmts.statsOrderCount = db.prepare(`
+    SELECT COUNT(*) AS c
+    FROM tickets
+    WHERE guild_id = ? AND COALESCE(order_state, 'none') != 'none'
+  `);
 
   stmts.ready = true;
   return stmts;
@@ -308,6 +345,19 @@ export function createPanel(guildId, p) {
 export const getPanel = (id, guildId) => prepare().getPanel.get(id, guildId);
 export const listPanels = (guildId) => prepare().listPanels.all(guildId);
 export const deletePanel = (id, guildId) => prepare().deletePanel.run(id, guildId);
+export const deletePanelsByGuild = (guildId) => prepare().deletePanelsByGuild.run(guildId);
+export function updatePanel(id, guildId, p) {
+  return prepare().updatePanel.run(
+    p.title,
+    p.description ?? null,
+    p.color ?? 5793266,
+    p.image ?? null,
+    p.thumbnail ?? null,
+    p.display_mode ?? 'buttons',
+    id,
+    guildId,
+  );
+}
 export const updatePanelMessage = (id, channelId, messageId) =>
   prepare().updatePanelMessage.run(messageId, channelId, id);
 
@@ -337,6 +387,29 @@ export const getButtons = (panelId) => prepare().getButtons.all(panelId);
 export const getButton = (id) => prepare().getButton.get(id);
 export const deleteButton = (id) => prepare().deleteButton.run(id);
 export const countButtons = (panelId) => prepare().countButtons.get(panelId).c;
+
+export function replaceButton(id, b) {
+  return prepare().replaceButton.run(
+    b.label,
+    b.emoji ?? null,
+    b.style ?? 1,
+    b.category_id ?? null,
+    b.support_role_ids ?? '[]',
+    b.ping_role_id ?? null,
+    b.mention_owner ?? 1,
+    b.name_template ?? 'ticket-{username}-{number}',
+    b.open_message ?? null,
+    b.questions ?? '[]',
+    b.add_role_on_open ?? null,
+    b.remove_role_on_close ?? null,
+    b.create_staff_thread ?? 0,
+    b.position ?? 0,
+    b.description ?? null,
+    b.placeholder_text ?? null,
+    b.claimed_category_id ?? null,
+    id,
+  );
+}
 
 export function updateButton(id, patch) {
   const s = prepare();
@@ -458,3 +531,4 @@ export const listAllLoyaltyTiers = (guildId) => prepare().listAllLoyaltyTiers.al
 export const statsCount = (guildId) => prepare().statsCount.get(guildId);
 export const statsTopStaff = (guildId) => prepare().statsTopStaff.all(guildId);
 export const statsAvgRating = (guildId) => prepare().statsAvgRating.get(guildId);
+export const statsOrderCount = (guildId) => prepare().statsOrderCount.get(guildId)?.c ?? 0;

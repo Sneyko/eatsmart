@@ -13,6 +13,8 @@ export const config = {
   clientId: process.env.CLIENT_ID,
   guildId: process.env.GUILD_ID || null,
   dbPath: process.env.DB_PATH || './data.db',
+  dashboardPassword: process.env.DASHBOARD_PASSWORD || null,
+  dashboardPort: Number(process.env.DASHBOARD_PORT || process.env.PORT || 8080),
   logLevel: process.env.LOG_LEVEL || 'info',
   nodeEnv: process.env.NODE_ENV || 'production',
 };

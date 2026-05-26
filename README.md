@@ -88,7 +88,7 @@ git clone https://github.com/sneyko/eatsmart.git
 cd eatsmart
 npm install
 cp .env.example .env
-# Édite .env et colle DISCORD_TOKEN, CLIENT_ID, et GUILD_ID (ID de ton serveur de test)
+# Édite .env et colle DISCORD_TOKEN, CLIENT_ID, GUILD_ID, et DASHBOARD_PASSWORD
 npm run deploy-commands
 npm start
 ```
@@ -225,10 +225,12 @@ primary_region = "cdg"
 flyctl auth login
 flyctl launch --no-deploy        # accepte le nom, refuse la DB Postgres
 flyctl volumes create data --size 1 --region cdg
-flyctl secrets set DISCORD_TOKEN=xxx CLIENT_ID=xxx
+flyctl secrets set DISCORD_TOKEN=xxx CLIENT_ID=xxx DASHBOARD_PASSWORD=un-mot-de-passe-long
 flyctl deploy
 flyctl logs
 ```
+
+Le panel web démarre avec le bot sur le port `8080`. En local, ouvre `http://localhost:8080` puis connecte-toi avec `DASHBOARD_PASSWORD`.
 
 ---
 
