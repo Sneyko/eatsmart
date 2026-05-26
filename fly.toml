@@ -1,8 +1,3 @@
-# fly.toml app configuration file generated for eatsmart on 2026-05-26T09:09:26Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
 app = 'eatsmart'
 primary_region = 'cdg'
 
@@ -14,6 +9,10 @@ primary_region = 'cdg'
   auto_extend_size_threshold = 80
   auto_extend_size_increment = '1GB'
   auto_extend_size_limit = '10GB'
+
+# 🚀 AJOUTE CE BLOC POUR CRÉER UN "WORKER" PERMANENT :
+[processes]
+  app = "node src/index.js" # Assure-toi que c'est bien le chemin vers ton fichier principal (ex: src/index.js)
 
 [[vm]]
   memory = '1gb'

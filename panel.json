@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "panel": {
+    "title": "🎫 Ouvrir un ticket — EatSmart",
+    "description": "👋 Salut ! Tu veux passer commande ou planifier ta livraison ?\n\n📥 **Sélectionne une option** dans le menu ci-dessous pour ouvrir ton ticket. Un membre du staff arrive dès que possible pour valider ta demande.\n\n⚠️ Remplis bien **toutes les infos** demandées dans le formulaire — sans ça, on ne peut pas traiter ta commande.\n\n💸 *Mode de paiement accepté : PayPal, Revolut, crypto.*",
+    "color": 5763719,
+    "image": null,
+    "thumbnail": null,
+    "display_mode": "select"
+  },
+  "buttons": [
+    {
+      "label": "Planifier",
+      "emoji": "📅",
+      "style": 1,
+      "mention_owner": 1,
+      "name_template": "planifier-{username}-{number}",
+      "open_message": "📅 **Ticket planification ouvert** — bonjour {user} !\n\n✅ Tes infos sont enregistrées. Un membre du staff va arriver d'ici peu pour valider ta planification.\n\n⏳ En attendant, **n'envoie pas plusieurs messages** : ça ne fait pas aller plus vite et ça pollue le ticket. 🙏",
+      "questions": "[{\"label\":\"📆 Date et heure souhaitées\",\"placeholder\":\"JJ/MM/AAAA — HH:MM\",\"required\":true,\"long\":false},{\"label\":\"🍽️ Type de commande\",\"placeholder\":\"McDo, UberEats France, UberEats Belgique...\",\"required\":true,\"long\":false},{\"label\":\"📍 Adresse complète\",\"placeholder\":\"numéro + rue + code postal + ville\",\"required\":true,\"long\":true},{\"label\":\"💳 Mode de paiement\",\"placeholder\":\"PayPal, Revolut, crypto\",\"required\":true,\"long\":false}]",
+      "create_staff_thread": 0,
+      "position": 0,
+      "description": "📆 Programmer une commande à l'avance.",
+      "placeholder_text": "🎯 Choisis ce que tu veux faire"
+    },
+    {
+      "label": "McDo",
+      "emoji": "🍔",
+      "style": 1,
+      "mention_owner": 1,
+      "name_template": "mcdo-{username}-{number}",
+      "open_message": "🍔 **McCommande ouverte** — bonjour {user} !\n\n✅ Tes infos sont bien enregistrées. Un membre du staff arrive pour valider ta commande.\n\n⏳ Patiente sans envoyer plusieurs messages — ça ne fait pas aller plus vite. 🙏\n\n💡 Pense à vérifier que ton adresse et ton mode de paiement sont **corrects** : c'est ce qui ralentit le plus les commandes.",
+      "questions": "[{\"label\":\"💰 Montant HT\",\"placeholder\":\"entre 20 € et 23 € HT\",\"required\":true,\"long\":false},{\"label\":\"🛒 Montant TTC\",\"placeholder\":\"prix total du panier (avec frais)\",\"required\":true,\"long\":false},{\"label\":\"📍 Adresse complète\",\"placeholder\":\"numéro + rue + code postal + ville\",\"required\":true,\"long\":true},{\"label\":\"💳 Mode de paiement\",\"placeholder\":\"PayPal, Revolut, crypto\",\"required\":true,\"long\":false}]",
+      "create_staff_thread": 0,
+      "position": 1,
+      "description": "🍟 Passer une McCommande.",
+      "placeholder_text": null
+    },
+    {
+      "label": "Commande",
+      "emoji": "🛍️",
+      "style": 1,
+      "mention_owner": 1,
+      "name_template": "commande-{username}-{number}",
+      "open_message": "🛍️ **Commande UberEats ouverte** — bonjour {user} !\n\n✅ On a bien reçu tes infos. Un membre du staff arrive pour valider ta commande dès que possible.\n\n⏳ Évite de spammer le ticket — on traite les demandes dans l'ordre. 🙏\n\n💡 Si une info est fausse, **dis-le maintenant** : modifier après validation, c'est plus compliqué.",
+      "questions": "[{\"label\":\"💰 Montant HT\",\"placeholder\":\"entre 20 € et 23 € HT\",\"required\":true,\"long\":false},{\"label\":\"🛒 Montant TTC\",\"placeholder\":\"prix total du panier (avec frais)\",\"required\":true,\"long\":false},{\"label\":\"📍 Adresse complète\",\"placeholder\":\"numéro + rue + code postal + ville\",\"required\":true,\"long\":true},{\"label\":\"💳 Mode de paiement\",\"placeholder\":\"PayPal, Revolut, crypto\",\"required\":true,\"long\":false}]",
+      "create_staff_thread": 0,
+      "position": 2,
+      "description": "🚀 Passer une commande UberEats.",
+      "placeholder_text": null
+    }
+  ]
+}
