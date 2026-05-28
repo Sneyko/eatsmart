@@ -38,6 +38,7 @@ import { handleAcceptRules } from '../handlers/rules.js';
 import {
   handleAddressGeneratorButton,
   handleAddressGeneratorModal,
+  handleAddressRetryButton,
 } from '../handlers/addressGenerator.js';
 
 export const name = Events.InteractionCreate;
@@ -125,6 +126,7 @@ async function routeButton(interaction) {
   if (id === 'order:validate-close') return handleValidateClose(interaction);
   if (id === 'rules:accept') return handleAcceptRules(interaction);
   if (id === 'address:open') return handleAddressGeneratorButton(interaction);
+  if (id === 'address:retry') return handleAddressRetryButton(interaction);
 }
 
 async function routeSelect(interaction) {
