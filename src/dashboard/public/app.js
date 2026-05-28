@@ -14,6 +14,7 @@ const tabs = [
   ['dashboard', 'Tableau de bord', 'layout-dashboard'],
   ['panels', 'Panels', 'panels-top-left'],
   ['options', 'Options & questions', 'list-plus'],
+  ['loyalty', 'Rôles auto', 'badge-check'],
   ['database', 'Base de données', 'database'],
 ];
 
@@ -192,6 +193,7 @@ function renderShell(content) {
 function renderActiveTab() {
   if (state.activeTab === 'panels') return renderPanels();
   if (state.activeTab === 'options') return renderOptions();
+  if (state.activeTab === 'loyalty') return renderLoyalty();
   if (state.activeTab === 'database') return renderDatabase();
   return renderDashboard();
 }
@@ -249,6 +251,96 @@ function fieldSelect(name, label, items, selected) {
       <span class="mb-2 block text-sm font-medium text-slate-300">${label}</span>
       <select name="${name}" class="field">${selectOptions(items, selected)}</select>
     </label>
+  `;
+}
+
+function renderLoyalty() {
+  const loyalty = state.data.loyalty || { client: [], cuistot: [] };
+  return `
+    <section class="space-y-5">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-white">Rôles automatiques</h2>
+          <p class="text-sm text-slate-400">Attribution par nombre de commandes validées</p>
+        </div>
+      </div>
+
+      <form id="loyaltyForm" class="soft-panel rounded-xl p-5">
+        <div class="mb-5 flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Ajouter ou mettre à jour un palier</h3>
+            <p class="text-sm text-slate-400">Un palier existant avec le même nom sera remplacé.</p>
+          </div>
+          <button class="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500" type="submit">
+            ${icon('save')}
+            Enregistrer
+          </button>
+        </div>
+        <div class="grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr_1.2fr_0.8fr]">
+          ${selectField('scope', 'Type', [{ id: 'client', name: 'Client' }, { id: 'cuistot', name: 'Cuistot' }], 'client', 'Type')}
+          ${inputField('tier_name', 'Nom du palier', '', { max: 32, required: true })}
+          <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-300">Commandes min.</span>
+            <input name="threshold" class="field" type="number" min="0" max="100000" step="1" value="1" required />
+          </label>
+          ${selectField('role_id', 'Rôle attribué', state.data.discord.roles, '', 'Choisir un rôle')}
+          <label class="block">
+            <span class="mb-2 block text-sm font-medium text-slate-300">Position</span>
+            <input name="position" class="field" type="number" min="0" max="20" step="1" value="0" />
+          </label>
+        </div>
+      </form>
+
+      <div class="grid gap-5 xl:grid-cols-2">
+        ${renderLoyaltyScope('client', 'Clients', 'shopping-bag', loyalty.client || [])}
+        ${renderLoyaltyScope('cuistot', 'Cuistots', 'chef-hat', loyalty.cuistot || [])}
+      </div>
+    </section>
+  `;
+}
+
+function renderLoyaltyScope(scope, label, iconName, tiers) {
+  return `
+    <section class="soft-panel rounded-xl p-5">
+      <div class="mb-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200">${icon(iconName)}</span>
+          <div>
+            <h3 class="font-semibold text-white">${label}</h3>
+            <p class="text-sm text-slate-400">${tiers.length} palier${tiers.length > 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </div>
+      <div class="grid gap-3">
+        ${
+          tiers.length
+            ? tiers.map((tier) => renderLoyaltyTier(scope, tier)).join('')
+            : `<div class="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">Aucun rôle automatique configuré.</div>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderLoyaltyTier(scope, tier) {
+  const role = state.data.discord.roles.find((item) => item.id === tier.role_id);
+  return `
+    <article class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
+          <div class="mb-2 flex flex-wrap items-center gap-2">
+            <span class="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">${tier.threshold} commande${tier.threshold > 1 ? 's' : ''}</span>
+            <span class="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">Position ${tier.position}</span>
+          </div>
+          <h4 class="truncate font-semibold text-white">${escapeHtml(tier.tier_name)}</h4>
+          <p class="mt-1 text-sm text-slate-400">${escapeHtml(role ? role.name : `Rôle ${tier.role_id}`)}</p>
+        </div>
+        <button data-action="delete-loyalty-tier" data-scope="${scope}" data-name="${escapeHtml(tier.tier_name)}" class="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-950/30 px-3 py-2 text-sm font-medium text-red-200 transition hover:bg-red-950/60">
+          ${icon('trash-2')}
+          Supprimer
+        </button>
+      </div>
+    </article>
   `;
 }
 
@@ -653,6 +745,14 @@ async function handleSubmit(event) {
     await refresh();
   }
 
+  if (event.target.id === 'loyaltyForm') {
+    event.preventDefault();
+    await api('/api/loyalty/tiers', { method: 'POST', body: formDataObject(event.target) });
+    event.target.reset();
+    showToast('Palier enregistré.');
+    await refresh();
+  }
+
   if (event.target.id === 'panelForm') {
     event.preventDefault();
     const panelId = event.target.dataset.panelId;
@@ -748,6 +848,16 @@ async function handleClick(event) {
     await api(`/api/options/${id}`, { method: 'DELETE', body: {} });
     state.editingOptionId = '';
     showToast('Option supprimée.');
+    await refresh();
+  }
+  if (action === 'delete-loyalty-tier') {
+    const { scope, name } = target.dataset;
+    if (!confirm(`Supprimer le palier "${name}" ?`)) return;
+    await api(`/api/loyalty/tiers/${encodeURIComponent(scope)}/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+      body: {},
+    });
+    showToast('Palier supprimé.');
     await refresh();
   }
   if (action === 'add-question') {

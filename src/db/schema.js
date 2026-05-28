@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { config, logger } from '../config.js';
 
 let db;
@@ -9,6 +11,8 @@ let db;
  */
 export function initDb() {
   if (db) return db;
+  const dbDir = dirname(config.dbPath);
+  if (dbDir && dbDir !== '.') mkdirSync(dbDir, { recursive: true });
   db = new Database(config.dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');

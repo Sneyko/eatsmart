@@ -16,6 +16,8 @@ import {
   getButton,
   getButtons,
   getPanel,
+  deleteLoyaltyTier,
+  listAllLoyaltyTiers,
   listPanels,
   replaceButton,
   statsCount,
@@ -23,6 +25,7 @@ import {
   updatePanel,
   updatePanelMessage,
   updateTicketsConfig,
+  upsertLoyaltyTier,
 } from '../db/queries.js';
 import { buildPanelMessage } from '../handlers/tickets.js';
 import { invalidateGuildConfig } from '../utils/cache.js';
@@ -274,6 +277,43 @@ function normalizeGuildConfigPayload(payload) {
   };
 }
 
+function normalizeLoyaltyScope(value) {
+  if (value === 'client' || value === 'cuistot') return value;
+  fail('Type de palier invalide.');
+}
+
+function normalizeLoyaltyTierPayload(payload) {
+  const threshold = Number(payload?.threshold);
+  const position = Number(payload?.position ?? 0);
+  const roleId = normalizeSnowflake(payload?.role_id, 'Rôle Discord');
+  if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100000) {
+    fail('Nombre de commandes minimum invalide.');
+  }
+  if (!Number.isInteger(position) || position < 0 || position > 20) {
+    fail("Position d'affichage invalide.");
+  }
+  if (!roleId) fail('Rôle Discord requis.');
+  return {
+    scope: normalizeLoyaltyScope(payload?.scope),
+    tier_name: normalizeText(payload?.tier_name, 32, 'Nom du palier', { required: true }),
+    threshold,
+    role_id: roleId,
+    position,
+  };
+}
+
+function loyaltyTiersToPayload(tiers) {
+  const grouped = { client: [], cuistot: [] };
+  for (const tier of tiers) {
+    if (!grouped[tier.scope]) continue;
+    grouped[tier.scope].push(tier);
+  }
+  for (const scope of Object.keys(grouped)) {
+    grouped[scope].sort((a, b) => a.threshold - b.threshold || a.position - b.position);
+  }
+  return grouped;
+}
+
 function getPanelsWithButtons(guildId) {
   return listPanels(guildId).map((panel) => panelToPayload(panel, getButtons(panel.id)));
 }
@@ -331,6 +371,7 @@ async function buildBootstrap(client, guild) {
     },
     discord: await getDiscordOptions(guild),
     panels: getPanelsWithButtons(guild.id),
+    loyalty: loyaltyTiersToPayload(listAllLoyaltyTiers(guild.id)),
     limits: {
       panelTitle: LIMITS.EMBED_TITLE,
       embedDescription: LIMITS.EMBED_DESCRIPTION,
@@ -492,6 +533,46 @@ function createDashboardApp(client) {
       updateTicketsConfig(guild.id, normalizeGuildConfigPayload(req.body));
       invalidateGuildConfig(guild.id);
       res.json({ ok: true, config: configToPayload(ensureGuildConfig(guild.id)) });
+    }),
+  );
+
+  app.get(
+    '/api/loyalty',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const guild = await resolveGuild(client, req);
+      res.json({ loyalty: loyaltyTiersToPayload(listAllLoyaltyTiers(guild.id)) });
+    }),
+  );
+
+  app.post(
+    '/api/loyalty/tiers',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const guild = await resolveGuild(client, req);
+      const tier = normalizeLoyaltyTierPayload(req.body);
+      upsertLoyaltyTier(
+        guild.id,
+        tier.scope,
+        tier.tier_name,
+        tier.threshold,
+        tier.role_id,
+        tier.position,
+      );
+      res.status(201).json({ ok: true, loyalty: loyaltyTiersToPayload(listAllLoyaltyTiers(guild.id)) });
+    }),
+  );
+
+  app.delete(
+    '/api/loyalty/tiers/:scope/:tierName',
+    requireAuth,
+    asyncRoute(async (req, res) => {
+      const guild = await resolveGuild(client, req);
+      const scope = normalizeLoyaltyScope(req.params.scope);
+      const tierName = normalizeText(req.params.tierName, 32, 'Nom du palier', { required: true });
+      const result = deleteLoyaltyTier(guild.id, scope, tierName);
+      if (result.changes === 0) fail('Palier introuvable.', 404);
+      res.json({ ok: true, loyalty: loyaltyTiersToPayload(listAllLoyaltyTiers(guild.id)) });
     }),
   );
 

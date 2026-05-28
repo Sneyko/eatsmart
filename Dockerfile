@@ -40,5 +40,5 @@ VOLUME /data
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 8080
-ENV DATABASE_URL="file:///data/sqlite.db"
+ENV DB_PATH="/data/data.db"
 CMD [ "npm", "run", "start" ]

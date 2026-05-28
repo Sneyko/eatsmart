@@ -250,6 +250,14 @@ Le panel web démarre avec le bot sur le port `8080`. En local, ouvre `http://lo
 
 `data.db` est le seul fichier critique. Il est en mode WAL — sauvegarde-le pendant que le bot tourne en utilisant l'API SQLite (`.backup`), pas un simple `cp` :
 
+Sur Fly.io, la base persistante doit être sur le volume monté :
+
+```bash
+DB_PATH=/data/data.db
+```
+
+Si le bot a déjà créé des panels dans une DB éphémère, les anciens messages Discord peuvent afficher `Bouton introuvable` après redéploiement. Dans ce cas, restaure la bonne DB sur `/data/data.db` ou recrée/importes les panels, puis renvoie les panels dans Discord pour générer de nouveaux boutons.
+
 ```bash
 # Backup manuel
 sqlite3 /home/ubuntu/eatsmart/data.db ".backup '/home/ubuntu/backup-$(date +%F).db'"
