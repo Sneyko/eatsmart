@@ -270,6 +270,77 @@ function prepare() {
     WHERE guild_id = ? AND COALESCE(order_state, 'none') != 'none'
   `);
 
+  stmts.getOrderTrackingByTicket = db.prepare(
+    `SELECT * FROM order_trackings WHERE ticket_id = ?`,
+  );
+  stmts.upsertOrderTracking = db.prepare(`
+    INSERT INTO order_trackings (
+      ticket_id, guild_id, channel_id, owner_id, provider, tracking_url,
+      active, next_check_at, fail_count
+    )
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, 0)
+    ON CONFLICT(ticket_id) DO UPDATE SET
+      guild_id = excluded.guild_id,
+      channel_id = excluded.channel_id,
+      owner_id = excluded.owner_id,
+      provider = excluded.provider,
+      tracking_url = excluded.tracking_url,
+      active = 1,
+      next_check_at = excluded.next_check_at,
+      fail_count = 0,
+      last_eta_minutes = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.last_eta_minutes
+      END,
+      last_eta_label = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.last_eta_label
+      END,
+      last_status_text = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.last_status_text
+      END,
+      last_checked_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.last_checked_at
+      END,
+      last_reminder_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.last_reminder_at
+      END,
+      near_notified_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.near_notified_at
+      END,
+      pin_notified_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.pin_notified_at
+      END,
+      completed_notified_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.completed_notified_at
+      END,
+      updated_at = strftime('%s','now')
+  `);
+  stmts.listDueOrderTrackings = db.prepare(`
+    SELECT ot.*, t.order_state, t.status AS ticket_status
+    FROM order_trackings ot
+    JOIN tickets t ON t.id = ot.ticket_id
+    WHERE ot.active = 1
+      AND t.status = 'open'
+      AND COALESCE(t.order_state, 'none') = 'sent'
+      AND COALESCE(ot.next_check_at, 0) <= ?
+    ORDER BY COALESCE(ot.next_check_at, 0) ASC
+    LIMIT ?
+  `);
+  stmts.stopOrderTrackingByTicket = db.prepare(`
+    UPDATE order_trackings SET
+      active = 0,
+      last_status_text = COALESCE(?, last_status_text),
+      updated_at = strftime('%s','now')
+    WHERE ticket_id = ?
+  `);
+
   stmts.ready = true;
   return stmts;
 }
@@ -532,3 +603,47 @@ export const statsCount = (guildId) => prepare().statsCount.get(guildId);
 export const statsTopStaff = (guildId) => prepare().statsTopStaff.all(guildId);
 export const statsAvgRating = (guildId) => prepare().statsAvgRating.get(guildId);
 export const statsOrderCount = (guildId) => prepare().statsOrderCount.get(guildId)?.c ?? 0;
+
+export const getOrderTrackingByTicket = (ticketId) =>
+  prepare().getOrderTrackingByTicket.get(ticketId);
+
+export function upsertOrderTracking(tracking) {
+  return prepare().upsertOrderTracking.run(
+    tracking.ticket_id,
+    tracking.guild_id,
+    tracking.channel_id,
+    tracking.owner_id,
+    tracking.provider ?? 'ubereats',
+    tracking.tracking_url,
+    tracking.next_check_at ?? Math.floor(Date.now() / 1000),
+  );
+}
+
+export const listDueOrderTrackings = (now, limit = 10) =>
+  prepare().listDueOrderTrackings.all(now, limit);
+
+export function updateOrderTracking(id, patch) {
+  const allowed = new Set([
+    'active',
+    'last_eta_minutes',
+    'last_eta_label',
+    'last_status_text',
+    'last_checked_at',
+    'next_check_at',
+    'last_reminder_at',
+    'near_notified_at',
+    'pin_notified_at',
+    'completed_notified_at',
+    'fail_count',
+  ]);
+  const entries = Object.entries(patch).filter(([key]) => allowed.has(key));
+  if (entries.length === 0) return { changes: 0 };
+  const assignments = entries.map(([key]) => `${key} = ?`).join(', ');
+  const values = entries.map(([, value]) => value);
+  return getDb()
+    .prepare(`UPDATE order_trackings SET ${assignments}, updated_at = strftime('%s','now') WHERE id = ?`)
+    .run(...values, id);
+}
+
+export const stopOrderTrackingByTicket = (ticketId, statusText = null) =>
+  prepare().stopOrderTrackingByTicket.run(statusText, ticketId);

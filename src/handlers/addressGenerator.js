@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
@@ -7,6 +8,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
+import sharp from 'sharp';
 import { config, logger } from '../config.js';
 import { errorEmbed } from '../utils/embeds.js';
 import { LIMITS, truncate } from '../utils/validators.js';
@@ -21,12 +23,22 @@ const ADDRESS_SESSION_TTL_MS = 10 * 60 * 1000;
 const FRENCH_ADDRESS_API_URL = process.env.FRENCH_ADDRESS_API_URL || 'https://api-adresse.data.gouv.fr';
 const NOMINATIM_BASE_URL = process.env.NOMINATIM_BASE_URL || 'https://nominatim.openstreetmap.org';
 const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+const ADDRESS_MAP_ENABLED = process.env.ADDRESS_MAP_ENABLED !== '0';
+const ADDRESS_MAP_WIDTH = Number(process.env.ADDRESS_MAP_WIDTH || 800);
+const ADDRESS_MAP_HEIGHT = Number(process.env.ADDRESS_MAP_HEIGHT || 450);
+const ADDRESS_MAP_FOOTER_HEIGHT = 54;
+const ADDRESS_MAP_TILE_SIZE = 256;
+const ADDRESS_MAP_TILE_URL =
+  process.env.ADDRESS_MAP_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const GEOCODER_USER_AGENT =
   process.env.NOMINATIM_USER_AGENT || `EatSmartTicketBot/1.0 DiscordApp/${config.clientId}`;
+const MAP_TILE_USER_AGENT =
+  process.env.MAP_TILE_USER_AGENT || 'EatSmartTicketBot/1.0 (https://github.com/Sneyko/eatsmart)';
 const PUBLIC_TAGS = ['amenity', 'shop', 'tourism', 'office', 'leisure', 'craft', 'healthcare'];
 
 let nextNominatimRequestAt = 0;
 const addressSessions = new Map();
+const mapTileCache = new Map();
 
 export function buildAddressGeneratorPanel() {
   const embed = new EmbedBuilder()
@@ -111,7 +123,7 @@ export async function handleAddressRetryButton(interaction) {
   try {
     const result = await generateNearbyAddress(session.origin);
     rememberAddressSession(interaction, session.origin);
-    return interaction.editReply(buildGeneratedAddressMessage(result));
+    return interaction.editReply(await buildGeneratedAddressMessage(result, session.origin));
   } catch (err) {
     logger.warn({ message: err.message }, 'Address regeneration failed');
     return interaction.editReply({
@@ -143,7 +155,7 @@ export async function handleAddressGeneratorModal(interaction) {
     const origin = await geocodeAddress(input);
     rememberAddressSession(interaction, origin);
     const result = await generateNearbyAddress(origin);
-    return interaction.editReply(buildGeneratedAddressMessage(result));
+    return interaction.editReply(await buildGeneratedAddressMessage(result, origin));
   } catch (err) {
     logger.warn({ message: err.message }, 'Address generation failed');
     return interaction.editReply({
@@ -399,7 +411,7 @@ function pickCandidate(candidates) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function buildGeneratedAddressMessage(result) {
+async function buildGeneratedAddressMessage(result, origin = null) {
   const embed = new EmbedBuilder()
     .setColor(0x8b5cf6)
     .setTitle('📍 Adresse générée')
@@ -446,6 +458,17 @@ function buildGeneratedAddressMessage(result) {
     )
     .setFooter({ text: 'Confidentiel — visible uniquement par toi' });
 
+  const files = [];
+  if (ADDRESS_MAP_ENABLED && canRenderMap(origin, result)) {
+    try {
+      const mapBuffer = await renderAddressMap(origin, result);
+      files.push(new AttachmentBuilder(mapBuffer, { name: 'adresse-map.png' }));
+      embed.setImage('attachment://adresse-map.png');
+    } catch (err) {
+      logger.warn({ message: err.message }, 'Address map render failed');
+    }
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('address:retry')
@@ -454,7 +477,7 @@ function buildGeneratedAddressMessage(result) {
       .setStyle(ButtonStyle.Secondary),
   );
 
-  return { embeds: [embed], components: [row] };
+  return { embeds: [embed], components: [row], files };
 }
 
 function readAddressForm(interaction) {
@@ -530,8 +553,214 @@ function formatCoordinates(lat, lon) {
   return `\`${lat.toFixed(5)}, ${lon.toFixed(5)}\``;
 }
 
+function canRenderMap(origin, result) {
+  return (
+    Number.isFinite(origin?.lat) &&
+    Number.isFinite(origin?.lon) &&
+    Number.isFinite(result?.lat) &&
+    Number.isFinite(result?.lon)
+  );
+}
+
+async function renderAddressMap(origin, result) {
+  const width = clampNumber(ADDRESS_MAP_WIDTH, 320, 1280);
+  const height = clampNumber(ADDRESS_MAP_HEIGHT, 260, 900);
+  const mapViewportHeight = Math.max(200, height - ADDRESS_MAP_FOOTER_HEIGHT);
+  const zoom = chooseMapZoom(origin, result, width, mapViewportHeight);
+  const originPx = projectToWorldPixel(origin.lat, origin.lon, zoom);
+  const resultPx = projectToWorldPixel(result.lat, result.lon, zoom);
+  const center = {
+    x: (originPx.x + resultPx.x) / 2,
+    y: (originPx.y + resultPx.y) / 2,
+  };
+  const topLeft = {
+    x: center.x - width / 2,
+    y: center.y - mapViewportHeight / 2,
+  };
+  const tiles = await fetchMapTiles(zoom, topLeft, width, height);
+  if (tiles.length === 0) throw new Error('No map tiles fetched');
+
+  const originPoint = {
+    x: originPx.x - topLeft.x,
+    y: originPx.y - topLeft.y,
+  };
+  const resultPoint = {
+    x: resultPx.x - topLeft.x,
+    y: resultPx.y - topLeft.y,
+  };
+
+  const base = sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: '#e8e4dc',
+    },
+  });
+
+  const png = await base
+    .composite([
+      ...tiles,
+      {
+        input: Buffer.from(buildMapOverlaySvg(width, height, originPoint, resultPoint, result)),
+        left: 0,
+        top: 0,
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  return png;
+}
+
+async function fetchMapTiles(zoom, topLeft, width, height) {
+  const maxTile = 2 ** zoom;
+  const minTileX = Math.floor(topLeft.x / ADDRESS_MAP_TILE_SIZE);
+  const maxTileX = Math.floor((topLeft.x + width) / ADDRESS_MAP_TILE_SIZE);
+  const minTileY = Math.floor(topLeft.y / ADDRESS_MAP_TILE_SIZE);
+  const maxTileY = Math.floor((topLeft.y + height) / ADDRESS_MAP_TILE_SIZE);
+  const tiles = [];
+
+  for (let tileX = minTileX; tileX <= maxTileX; tileX += 1) {
+    for (let tileY = minTileY; tileY <= maxTileY; tileY += 1) {
+      if (tileY < 0 || tileY >= maxTile) continue;
+      const wrappedX = modulo(tileX, maxTile);
+      const left = Math.round(tileX * ADDRESS_MAP_TILE_SIZE - topLeft.x);
+      const top = Math.round(tileY * ADDRESS_MAP_TILE_SIZE - topLeft.y);
+      const tile = await fetchMapTile(zoom, wrappedX, tileY).catch((err) => {
+        logger.debug({ message: err.message, zoom, x: wrappedX, y: tileY }, 'Map tile fetch failed');
+        return null;
+      });
+      if (tile) tiles.push({ input: tile, left, top });
+    }
+  }
+
+  return tiles;
+}
+
+async function fetchMapTile(zoom, x, y) {
+  const key = `${zoom}/${x}/${y}`;
+  const cached = mapTileCache.get(key);
+  if (cached) return cached;
+
+  const url = ADDRESS_MAP_TILE_URL
+    .replace('{z}', String(zoom))
+    .replace('{x}', String(x))
+    .replace('{y}', String(y));
+  const buffer = await fetchBinary(url, {
+    headers: {
+      'User-Agent': MAP_TILE_USER_AGENT,
+      Accept: 'image/png,image/*;q=0.8,*/*;q=0.5',
+    },
+  });
+  rememberMapTile(key, buffer);
+  return buffer;
+}
+
+function rememberMapTile(key, buffer) {
+  if (mapTileCache.size >= 256) {
+    const oldest = mapTileCache.keys().next().value;
+    if (oldest) mapTileCache.delete(oldest);
+  }
+  mapTileCache.set(key, buffer);
+}
+
+async function fetchBinary(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) throw new Error(`Map tile error (${response.status})`);
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function chooseMapZoom(origin, result, width, height) {
+  for (let zoom = 18; zoom >= 13; zoom -= 1) {
+    const a = projectToWorldPixel(origin.lat, origin.lon, zoom);
+    const b = projectToWorldPixel(result.lat, result.lon, zoom);
+    if (Math.abs(a.x - b.x) <= width * 0.62 && Math.abs(a.y - b.y) <= height * 0.62) {
+      return zoom;
+    }
+  }
+  return 13;
+}
+
+function projectToWorldPixel(lat, lon, zoom) {
+  const sinLat = Math.sin(toRad(Math.max(-85.05112878, Math.min(85.05112878, lat))));
+  const scale = ADDRESS_MAP_TILE_SIZE * 2 ** zoom;
+  return {
+    x: ((lon + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function buildMapOverlaySvg(width, height, originPoint, resultPoint, result) {
+  const footerY = height - ADDRESS_MAP_FOOTER_HEIGHT;
+  const line = shortenLine(originPoint, resultPoint, 17, 19);
+  const distance = Number.isFinite(result.distance) ? Math.round(result.distance) : null;
+  const address = escapeXml(result.fullAddress || result.address || 'Adresse générée');
+  const footer = escapeXml(
+    `Distance : ${distance ? `~${distance} m` : '—'} | Restez appuyé sur l'adresse pour copier`,
+  );
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 11 5 L 0 10 z" fill="#5865f2"/>
+    </marker>
+  </defs>
+  <path d="M ${line.x1.toFixed(1)} ${line.y1.toFixed(1)} L ${line.x2.toFixed(1)} ${line.y2.toFixed(1)}"
+        stroke="#5865f2" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" opacity="0.92" filter="url(#shadow)"/>
+  <circle cx="${originPoint.x.toFixed(1)}" cy="${originPoint.y.toFixed(1)}" r="10" fill="#22c55e" stroke="#ffffff" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="${resultPoint.x.toFixed(1)}" cy="${resultPoint.y.toFixed(1)}" r="11" fill="#ef4444" stroke="#ffffff" stroke-width="4" filter="url(#shadow)"/>
+  <rect x="0" y="${footerY}" width="${width}" height="${ADDRESS_MAP_FOOTER_HEIGHT}" fill="#2f3136" opacity="0.96"/>
+  <text x="20" y="${footerY + 34}" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">${footer}</text>
+  <text x="${width - 16}" y="${footerY + 34}" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#cbd5e1" text-anchor="end">© OpenStreetMap</text>
+  <title>${address}</title>
+</svg>`;
+}
+
+function shortenLine(a, b, startOffset, endOffset) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.hypot(dx, dy);
+  if (length < startOffset + endOffset + 1) return { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+  const ux = dx / length;
+  const uy = dy / length;
+  return {
+    x1: a.x + ux * startOffset,
+    y1: a.y + uy * startOffset,
+    x2: b.x - ux * endOffset,
+    y2: b.y - uy * endOffset,
+  };
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function modulo(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
 function escapeInlineCode(value) {
   return value.replace(/`/g, "'");
+}
+
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function escapeMarkdown(value) {

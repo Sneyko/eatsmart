@@ -177,6 +177,32 @@ export function initDb() {
       PRIMARY KEY (guild_id, scope, tier_name)
     );
     CREATE INDEX IF NOT EXISTS idx_loyalty_tiers_lookup ON loyalty_tiers(guild_id, scope, threshold DESC);
+
+    CREATE TABLE IF NOT EXISTS order_trackings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id INTEGER NOT NULL UNIQUE,
+      guild_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'ubereats',
+      tracking_url TEXT NOT NULL,
+      active INTEGER DEFAULT 1,
+      last_eta_minutes INTEGER,
+      last_eta_label TEXT,
+      last_status_text TEXT,
+      last_checked_at INTEGER,
+      next_check_at INTEGER DEFAULT (strftime('%s','now')),
+      last_reminder_at INTEGER,
+      near_notified_at INTEGER,
+      pin_notified_at INTEGER,
+      completed_notified_at INTEGER,
+      fail_count INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s','now')),
+      updated_at INTEGER DEFAULT (strftime('%s','now')),
+      FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_trackings_due ON order_trackings(active, next_check_at);
+    CREATE INDEX IF NOT EXISTS idx_order_trackings_ticket ON order_trackings(ticket_id);
   `);
 
   // Migrations idempotentes (no-op si la colonne existe deja).

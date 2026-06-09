@@ -666,8 +666,10 @@ export async function claimTicket(interaction) {
   setTicketClaimed(ticket.id, interaction.user.id);
   logAction(interaction.guild.id, ticket.id, interaction.user.id, 'claim');
 
+  const cfg = getCachedGuildConfig(interaction.guild.id);
+  let button = null;
   if (ticket.button_id) {
-    const button = getButton(ticket.button_id);
+    button = getButton(ticket.button_id);
     if (button?.claimed_category_id) {
       try {
         await interaction.channel.setParent(button.claimed_category_id, { lockPermissions: false });
@@ -677,23 +679,12 @@ export async function claimTicket(interaction) {
     }
   }
 
-  const cfg = getCachedGuildConfig(interaction.guild.id);
-  let supportRoles = [];
-  try {
-    supportRoles = JSON.parse(cfg.support_role_ids || '[]');
-  } catch {}
-  for (const r of supportRoles) {
-    try {
-      await interaction.channel.permissionOverwrites.edit(r, { SendMessages: false });
-    } catch {}
-  }
-  try {
-    await interaction.channel.permissionOverwrites.edit(interaction.user.id, {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true,
-    });
-  } catch {}
+  await applyClaimedTicketPermissions(interaction.channel, {
+    botId: interaction.client.user.id,
+    claimedById: interaction.user.id,
+    ownerId: ticket.owner_id,
+    roleIds: getClaimRestrictedRoleIds(button, cfg),
+  });
 
   await interaction.reply({
     embeds: [successEmbed(`Ticket claim par <@${interaction.user.id}>.`)],
@@ -718,6 +709,82 @@ export async function claimTicket(interaction) {
       )
       .setTimestamp(),
   );
+}
+
+async function applyClaimedTicketPermissions(channel, { botId, claimedById, ownerId, roleIds }) {
+  const deniedRolePermissions = {
+    ViewChannel: false,
+    SendMessages: false,
+    ReadMessageHistory: false,
+    ManageMessages: false,
+  };
+  const clientPermissions = {
+    ViewChannel: true,
+    SendMessages: true,
+    ReadMessageHistory: true,
+    AttachFiles: true,
+    EmbedLinks: true,
+  };
+  const staffPermissions = {
+    ...clientPermissions,
+    ManageMessages: true,
+  };
+  const botPermissions = {
+    ...staffPermissions,
+    ManageChannels: true,
+  };
+
+  for (const roleId of roleIds) {
+    try {
+      await channel.permissionOverwrites.edit(roleId, deniedRolePermissions, {
+        reason: 'Ticket claim: restriction au cuistot assigne',
+      });
+    } catch (err) {
+      logger.debug({ err, roleId }, 'Could not restrict support role on claimed ticket');
+    }
+  }
+
+  try {
+    await channel.permissionOverwrites.edit(ownerId, clientPermissions, {
+      reason: 'Ticket claim: maintien acces client',
+    });
+  } catch (err) {
+    logger.debug({ err, ownerId }, 'Could not keep owner permissions on claimed ticket');
+  }
+
+  try {
+    await channel.permissionOverwrites.edit(claimedById, staffPermissions, {
+      reason: 'Ticket claim: acces cuistot assigne',
+    });
+  } catch (err) {
+    logger.debug({ err, claimedById }, 'Could not grant claimed staff permissions');
+  }
+
+  try {
+    await channel.permissionOverwrites.edit(botId, botPermissions, {
+      reason: 'Ticket claim: maintien acces bot',
+    });
+  } catch (err) {
+    logger.debug({ err, botId }, 'Could not keep bot permissions on claimed ticket');
+  }
+}
+
+function getClaimRestrictedRoleIds(button, cfg) {
+  const roleIds = new Set([
+    ...parseJsonArray(cfg.support_role_ids),
+    ...parseJsonArray(button?.support_role_ids),
+  ]);
+  if (button?.ping_role_id) roleIds.add(button.ping_role_id);
+  return [...roleIds].filter(Boolean);
+}
+
+function parseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 /**

@@ -18,6 +18,10 @@ import {
 } from '../db/queries.js';
 import { closeTicket } from './tickets.js';
 import { syncLoyaltyRole } from './loyalty.js';
+import {
+  stopOrderTrackingForTicket,
+  syncOrderTrackingForTicket,
+} from '../utils/orderTracking.js';
 
 /**
  * Construit la rangée d'actions cuistot. Le rendu est public mais les
@@ -181,7 +185,7 @@ export async function handleSendOrder(interaction) {
         .setRequired(true)
         .setMaxLength(1500)
         .setValue(ticket.order_tracking || '')
-        .setPlaceholder('Colle ici le ou les liens de suivi'),
+        .setPlaceholder('Colle ici le ou les liens de suivi Uber Eats'),
     ),
   );
   await interaction.showModal(modal);
@@ -206,8 +210,24 @@ export async function handleSendOrderModal(interaction) {
   ticket.order_tracking = tracking;
 
   await upsertStatusMessage(interaction.channel, ticket, ticket.claimed_by);
+  const trackingState = syncOrderTrackingForTicket(ticket);
+  if (trackingState.active && trackingState.changed) {
+    await interaction.channel.send({
+      embeds: [
+        infoEmbed(
+          `Suivi Uber Eats activé pour <@${ticket.owner_id}>. Le bot tentera de lire l'heure d'arrivée et enverra les rappels ici toutes les 5 minutes quand elle est disponible.`,
+        ),
+      ],
+    });
+  }
   return interaction.reply({
-    embeds: [successEmbed("Commande envoyée. Le client voit l'état mis à jour.")],
+    embeds: [
+      successEmbed(
+        trackingState.active
+          ? "Commande envoyée. Le suivi Uber Eats automatique est activé."
+          : "Commande envoyée. Aucun lien Uber Eats valide n'a été détecté pour le suivi automatique.",
+      ),
+    ],
     ephemeral: true,
   });
 }
@@ -236,6 +256,7 @@ export async function handleCompleteOrder(interaction) {
 
   updateOrderState(ticket.id, { order_state: 'completed' });
   ticket.order_state = 'completed';
+  stopOrderTrackingForTicket(ticket.id, 'Commande terminée par le staff');
 
   await lockChannelReadOnly(interaction.channel, ticket);
   await upsertStatusMessage(interaction.channel, ticket, ticket.claimed_by);
@@ -289,6 +310,7 @@ export async function handleCancelOrderModal(interaction) {
   });
   ticket.order_state = 'cancelled';
   ticket.order_cancel_reason = reason;
+  stopOrderTrackingForTicket(ticket.id, 'Commande annulée par le staff');
 
   await lockChannelReadOnly(interaction.channel, ticket);
   await upsertStatusMessage(interaction.channel, ticket, ticket.claimed_by || interaction.user.id);
