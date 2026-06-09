@@ -341,6 +341,132 @@ function prepare() {
     WHERE ticket_id = ?
   `);
 
+  stmts.createGiveaway = db.prepare(`
+    INSERT INTO giveaways (
+      guild_id, channel_id, host_id, prize, description, image,
+      winners_count, required_invites, ends_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  stmts.updateGiveawayMessage = db.prepare(
+    `UPDATE giveaways SET channel_id = ?, message_id = ? WHERE id = ?`,
+  );
+  stmts.getGiveaway = db.prepare(`SELECT * FROM giveaways WHERE id = ?`);
+  stmts.getGiveawayByMessage = db.prepare(
+    `SELECT * FROM giveaways WHERE guild_id = ? AND message_id = ?`,
+  );
+  stmts.listGuildGiveaways = db.prepare(`
+    SELECT * FROM giveaways
+    WHERE guild_id = ?
+    ORDER BY status ASC, ends_at DESC
+    LIMIT ?
+  `);
+  stmts.listDueGiveaways = db.prepare(`
+    SELECT * FROM giveaways
+    WHERE status = 'open' AND ends_at <= ?
+    ORDER BY ends_at ASC
+    LIMIT ?
+  `);
+  stmts.listOpenGiveaways = db.prepare(
+    `SELECT * FROM giveaways WHERE status = 'open' ORDER BY ends_at ASC`,
+  );
+  stmts.addGiveawayEntry = db.prepare(`
+    INSERT OR IGNORE INTO giveaway_entries (giveaway_id, guild_id, user_id)
+    VALUES (?, ?, ?)
+  `);
+  stmts.countGiveawayEntries = db.prepare(
+    `SELECT COUNT(*) AS c FROM giveaway_entries WHERE giveaway_id = ?`,
+  );
+  stmts.listGiveawayEntries = db.prepare(
+    `SELECT user_id FROM giveaway_entries WHERE giveaway_id = ? ORDER BY joined_at ASC`,
+  );
+  stmts.endGiveaway = db.prepare(`
+    UPDATE giveaways SET
+      status = 'ended',
+      winner_ids = ?,
+      ended_at = strftime('%s','now')
+    WHERE id = ?
+  `);
+
+  stmts.getInviteMember = db.prepare(`
+    SELECT * FROM invite_members WHERE guild_id = ? AND invited_user_id = ?
+  `);
+  stmts.upsertInviteMember = db.prepare(`
+    INSERT INTO invite_members (
+      guild_id, invited_user_id, inviter_id, invite_code, joined_at, left_at, active
+    )
+    VALUES (?, ?, ?, ?, strftime('%s','now'), NULL, 1)
+    ON CONFLICT(guild_id, invited_user_id) DO UPDATE SET
+      inviter_id = excluded.inviter_id,
+      invite_code = excluded.invite_code,
+      joined_at = excluded.joined_at,
+      left_at = NULL,
+      active = 1
+  `);
+  stmts.incrementInviteStats = db.prepare(`
+    INSERT INTO invite_stats (
+      guild_id, inviter_id, total_invites, active_invites, left_invites, updated_at
+    )
+    VALUES (?, ?, 1, 1, 0, strftime('%s','now'))
+    ON CONFLICT(guild_id, inviter_id) DO UPDATE SET
+      total_invites = total_invites + 1,
+      active_invites = active_invites + 1,
+      updated_at = strftime('%s','now')
+  `);
+  stmts.deactivateInviteMember = db.prepare(`
+    UPDATE invite_members SET
+      active = 0,
+      left_at = strftime('%s','now')
+    WHERE guild_id = ? AND invited_user_id = ? AND active = 1
+  `);
+  stmts.decrementInviteStats = db.prepare(`
+    UPDATE invite_stats SET
+      active_invites = CASE WHEN active_invites > 0 THEN active_invites - 1 ELSE 0 END,
+      left_invites = left_invites + 1,
+      updated_at = strftime('%s','now')
+    WHERE guild_id = ? AND inviter_id = ?
+  `);
+  stmts.getInviteStats = db.prepare(`
+    SELECT * FROM invite_stats WHERE guild_id = ? AND inviter_id = ?
+  `);
+  stmts.topInviteStats = db.prepare(`
+    SELECT * FROM invite_stats
+    WHERE guild_id = ?
+    ORDER BY active_invites DESC, total_invites DESC
+    LIMIT ?
+  `);
+  stmts.upsertInviteReward = db.prepare(`
+    INSERT INTO invite_rewards (
+      guild_id, tier_name, threshold, reward_description, role_id,
+      announce_channel_id, position, enabled
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(guild_id, tier_name) DO UPDATE SET
+      threshold = excluded.threshold,
+      reward_description = excluded.reward_description,
+      role_id = excluded.role_id,
+      announce_channel_id = excluded.announce_channel_id,
+      position = excluded.position,
+      enabled = 1
+  `);
+  stmts.deleteInviteReward = db.prepare(
+    `DELETE FROM invite_rewards WHERE guild_id = ? AND tier_name = ?`,
+  );
+  stmts.listInviteRewards = db.prepare(`
+    SELECT * FROM invite_rewards
+    WHERE guild_id = ? AND enabled = 1
+    ORDER BY threshold ASC, position ASC
+  `);
+  stmts.listAllInviteRewards = db.prepare(`
+    SELECT * FROM invite_rewards
+    WHERE guild_id = ?
+    ORDER BY threshold ASC, position ASC
+  `);
+  stmts.claimInviteReward = db.prepare(`
+    INSERT OR IGNORE INTO invite_reward_claims (guild_id, user_id, tier_name)
+    VALUES (?, ?, ?)
+  `);
+
   stmts.ready = true;
   return stmts;
 }
@@ -647,3 +773,100 @@ export function updateOrderTracking(id, patch) {
 
 export const stopOrderTrackingByTicket = (ticketId, statusText = null) =>
   prepare().stopOrderTrackingByTicket.run(statusText, ticketId);
+
+export function createGiveaway(giveaway) {
+  return prepare().createGiveaway.run(
+    giveaway.guild_id,
+    giveaway.channel_id,
+    giveaway.host_id,
+    giveaway.prize,
+    giveaway.description ?? null,
+    giveaway.image ?? null,
+    giveaway.winners_count ?? 1,
+    giveaway.required_invites ?? 0,
+    giveaway.ends_at,
+  ).lastInsertRowid;
+}
+
+export const updateGiveawayMessage = (id, channelId, messageId) =>
+  prepare().updateGiveawayMessage.run(channelId, messageId, id);
+export const getGiveaway = (id) => prepare().getGiveaway.get(id);
+export const getGiveawayByMessage = (guildId, messageId) =>
+  prepare().getGiveawayByMessage.get(guildId, messageId);
+export const listGuildGiveaways = (guildId, limit = 10) =>
+  prepare().listGuildGiveaways.all(guildId, limit);
+export const listDueGiveaways = (now, limit = 10) =>
+  prepare().listDueGiveaways.all(now, limit);
+export const listOpenGiveaways = () => prepare().listOpenGiveaways.all();
+export const addGiveawayEntry = (giveawayId, guildId, userId) =>
+  prepare().addGiveawayEntry.run(giveawayId, guildId, userId);
+export const countGiveawayEntries = (giveawayId) =>
+  prepare().countGiveawayEntries.get(giveawayId)?.c ?? 0;
+export const listGiveawayEntries = (giveawayId) =>
+  prepare().listGiveawayEntries.all(giveawayId);
+export const endGiveaway = (giveawayId, winnerIds) =>
+  prepare().endGiveaway.run(JSON.stringify(winnerIds ?? []), giveawayId);
+
+export function recordMemberInvite(guildId, invitedUserId, inviterId, inviteCode) {
+  const s = prepare();
+  const tx = getDb().transaction(() => {
+    const previous = s.getInviteMember.get(guildId, invitedUserId);
+    if (previous?.active) return { counted: false, previous };
+
+    s.upsertInviteMember.run(guildId, invitedUserId, inviterId ?? null, inviteCode ?? null);
+    if (inviterId) s.incrementInviteStats.run(guildId, inviterId);
+    return { counted: !!inviterId, previous };
+  });
+  return tx();
+}
+
+export function recordMemberLeave(guildId, invitedUserId) {
+  const s = prepare();
+  const tx = getDb().transaction(() => {
+    const previous = s.getInviteMember.get(guildId, invitedUserId);
+    if (!previous?.active) return { counted: false, previous };
+
+    const result = s.deactivateInviteMember.run(guildId, invitedUserId);
+    if (result.changes > 0 && previous.inviter_id) {
+      s.decrementInviteStats.run(guildId, previous.inviter_id);
+      return { counted: true, previous };
+    }
+    return { counted: false, previous };
+  });
+  return tx();
+}
+
+export const getInviteStats = (guildId, inviterId) =>
+  prepare().getInviteStats.get(guildId, inviterId) ?? {
+    guild_id: guildId,
+    inviter_id: inviterId,
+    total_invites: 0,
+    active_invites: 0,
+    left_invites: 0,
+  };
+export const topInviteStats = (guildId, limit = 10) =>
+  prepare().topInviteStats.all(guildId, limit);
+export const upsertInviteReward = (
+  guildId,
+  tierName,
+  threshold,
+  rewardDescription,
+  roleId,
+  announceChannelId,
+  position = 0,
+) =>
+  prepare().upsertInviteReward.run(
+    guildId,
+    tierName,
+    threshold,
+    rewardDescription,
+    roleId ?? null,
+    announceChannelId ?? null,
+    position,
+  );
+export const deleteInviteReward = (guildId, tierName) =>
+  prepare().deleteInviteReward.run(guildId, tierName);
+export const listInviteRewards = (guildId) => prepare().listInviteRewards.all(guildId);
+export const listAllInviteRewards = (guildId) => prepare().listAllInviteRewards.all(guildId);
+export const claimInviteReward = (guildId, userId, tierName) =>
+  prepare().claimInviteReward.run(guildId, userId, tierName);

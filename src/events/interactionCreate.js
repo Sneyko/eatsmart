@@ -40,6 +40,7 @@ import {
   handleAddressGeneratorModal,
   handleAddressRetryButton,
 } from '../handlers/addressGenerator.js';
+import { handleGiveawayJoin } from '../handlers/giveaways.js';
 
 export const name = Events.InteractionCreate;
 
@@ -127,6 +128,7 @@ async function routeButton(interaction) {
   if (id === 'rules:accept') return handleAcceptRules(interaction);
   if (id === 'address:open') return handleAddressGeneratorButton(interaction);
   if (id === 'address:retry') return handleAddressRetryButton(interaction);
+  if (id.startsWith('giveaway:join:')) return handleGiveawayJoin(interaction, id.split(':')[2]);
 }
 
 async function routeSelect(interaction) {
