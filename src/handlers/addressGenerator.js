@@ -721,8 +721,8 @@ function buildMapOverlaySvg(width, height, originPoint, resultPoint, result) {
   <circle cx="${originPoint.x.toFixed(1)}" cy="${originPoint.y.toFixed(1)}" r="10" fill="#22c55e" stroke="#ffffff" stroke-width="4" filter="url(#shadow)"/>
   <circle cx="${resultPoint.x.toFixed(1)}" cy="${resultPoint.y.toFixed(1)}" r="11" fill="#ef4444" stroke="#ffffff" stroke-width="4" filter="url(#shadow)"/>
   <rect x="0" y="${footerY}" width="${width}" height="${ADDRESS_MAP_FOOTER_HEIGHT}" fill="#2f3136" opacity="0.96"/>
-  <text x="20" y="${footerY + 34}" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">${footer}</text>
-  <text x="${width - 16}" y="${footerY + 34}" font-family="Arial, Helvetica, sans-serif" font-size="15" fill="#cbd5e1" text-anchor="end">© OpenStreetMap</text>
+  <text x="20" y="${footerY + 34}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">${footer}</text>
+  <text x="${width - 16}" y="${footerY + 34}" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" font-size="15" fill="#cbd5e1" text-anchor="end">© OpenStreetMap</text>
   <title>${address}</title>
 </svg>`;
 }

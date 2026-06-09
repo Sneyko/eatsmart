@@ -31,6 +31,11 @@ COPY . .
 # Final stage for app image
 FROM base
 
+# Fonts used by sharp/librsvg when rendering generated map captions.
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y fontconfig fonts-dejavu-core && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy built application
 COPY --from=build /app /app
 
