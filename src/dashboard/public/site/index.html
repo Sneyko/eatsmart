@@ -7,8 +7,24 @@
       name="description"
       content="EatSmart est un service Discord privé pour organiser les commandes, tickets et suivis de livraison rapidement."
     />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.eatsmart.tech/" />
+    <meta property="og:title" content="EatSmart - Rejoins le Discord" />
+    <meta
+      property="og:description"
+      content="Rejoins EatSmart pour commander et suivre tes demandes directement sur Discord."
+    />
+    <meta property="og:image" content="https://www.eatsmart.tech/site/assets/banner.gif" />
+    <meta property="og:image:width" content="800" />
+    <meta property="og:image:height" content="450" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EatSmart - Rejoins le Discord" />
+    <meta
+      name="twitter:description"
+      content="Rejoins EatSmart pour commander et suivre tes demandes directement sur Discord."
+    />
+    <meta name="twitter:image" content="https://www.eatsmart.tech/site/assets/banner.gif" />
     <title>EatSmart - Commandes Discord rapides et organisées</title>
-    <link rel="preload" href="/site/assets/eatsmart-hero.webp" as="image" />
     <link rel="stylesheet" href="/site/styles.css" />
     <script type="module" src="/site/app.js"></script>
   </head>
@@ -28,24 +44,35 @@
 
     <main>
       <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-content">
-          <p class="eyebrow">Service privé de commande Discord</p>
-          <h1 id="hero-title">EatSmart</h1>
-          <p class="hero-copy">
-            Un service Discord de commandes et livraison privé, rapide et organisé pour suivre chaque demande
-            sans friction.
-          </p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="/invite">Rejoindre le Discord</a>
-            <button class="button button-secondary" type="button" data-scroll-target="#fonctionnement">
-              Voir le fonctionnement
-            </button>
+        <div class="hero-inner">
+          <div class="hero-content">
+            <p class="eyebrow">Service privé de commande Discord</p>
+            <h1 id="hero-title">EatSmart</h1>
+            <p class="hero-copy">
+              Un service Discord de commandes et livraison privé, rapide et organisé pour suivre chaque demande
+              sans friction.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="/invite">Rejoindre le Discord</a>
+              <button class="button button-secondary" type="button" data-scroll-target="#fonctionnement">
+                Voir le fonctionnement
+              </button>
+            </div>
+            <div class="hero-proof" aria-label="Points forts EatSmart">
+              <span>Tickets privés</span>
+              <span>Suivi Discord</span>
+              <span>Support privé</span>
+            </div>
           </div>
-          <div class="hero-proof" aria-label="Points forts EatSmart">
-            <span>Tickets privés</span>
-            <span>Suivi Discord</span>
-            <span>Support privé</span>
-          </div>
+          <figure class="hero-media">
+            <img
+              src="/site/assets/banner.gif"
+              width="800"
+              height="450"
+              alt="Bannière EatSmart"
+              fetchpriority="high"
+            />
+          </figure>
         </div>
       </section>
 
