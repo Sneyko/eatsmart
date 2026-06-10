@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/invite",
+      "destination": "/api/invite"
+    },
+    {
+      "source": "/site/:path*",
+      "destination": "/src/dashboard/public/site/:path*"
+    },
+    {
+      "source": "/",
+      "destination": "/src/dashboard/public/site/index.html"
+    }
+  ]
+}
