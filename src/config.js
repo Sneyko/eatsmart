@@ -15,6 +15,7 @@ export const config = {
   dbPath: process.env.DB_PATH || './data.db',
   dashboardPassword: process.env.DASHBOARD_PASSWORD || null,
   dashboardPort: Number(process.env.DASHBOARD_PORT || process.env.PORT || 8080),
+  discordInviteUrl: process.env.DISCORD_INVITE_URL || null,
   logLevel: process.env.LOG_LEVEL || 'info',
   nodeEnv: process.env.NODE_ENV || 'production',
 };

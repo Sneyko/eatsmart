@@ -76,7 +76,7 @@ async function api(path, options = {}) {
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
   if (response.status === 401) {
-    window.location.href = '/login';
+    window.location.href = '/admin/login';
     return null;
   }
   const data = await response.json().catch(() => ({}));
@@ -92,7 +92,7 @@ async function loadDashboard() {
   try {
     const session = await api('/api/session');
     if (!session?.authenticated) {
-      window.location.href = '/login';
+      window.location.href = '/admin/login';
       return;
     }
     await refresh();
@@ -804,7 +804,7 @@ async function handleClick(event) {
   }
   if (action === 'logout') {
     await api('/api/logout', { method: 'POST', body: {} });
-    window.location.href = '/login';
+    window.location.href = '/admin/login';
   }
   if (action === 'new-panel') {
     state.modal = { type: 'panel' };

@@ -70,7 +70,7 @@
           body: JSON.stringify({ password: document.querySelector('#password').value }),
         });
         if (response.ok) {
-          window.location.href = '/';
+          window.location.href = '/admin';
           return;
         }
         const data = await response.json().catch(() => ({}));

@@ -33,6 +33,7 @@ import { LIMITS, parseColor, truncate } from '../utils/validators.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, 'public');
+const siteDir = join(publicDir, 'site');
 const sessions = new Map();
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 let dashboardServer;
@@ -94,6 +95,18 @@ function makeCookie(req, token, maxAge = SESSION_TTL_MS / 1000) {
 
 function clearCookie() {
   return 'dashboard_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+}
+
+function normalizedInviteUrl() {
+  const inviteUrl = String(config.discordInviteUrl || '').trim();
+  if (!inviteUrl) return null;
+  try {
+    const parsedUrl = new URL(inviteUrl);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) return null;
+    return parsedUrl.href;
+  } catch {
+    return null;
+  }
 }
 
 function safePasswordEquals(input, expected) {
@@ -474,17 +487,32 @@ function createDashboardApp(client) {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false }));
 
-  app.get('/login', (req, res) => {
-    if (getSession(req)) return res.redirect('/');
-    return res.sendFile(join(publicDir, 'login.html'));
+  app.use('/site', express.static(siteDir, { index: false }));
+
+  app.get('/invite', (req, res) => {
+    const inviteUrl = normalizedInviteUrl();
+    if (!inviteUrl) return res.status(503).sendFile(join(siteDir, 'invite-error.html'));
+    return res.redirect(302, inviteUrl);
   });
 
   app.get('/', (req, res) => {
-    if (!getSession(req)) return res.redirect('/login');
+    return res.sendFile(join(siteDir, 'index.html'));
+  });
+
+  app.get(['/admin/login', '/dashboard/login'], (req, res) => {
+    if (getSession(req)) return res.redirect('/admin');
+    return res.sendFile(join(publicDir, 'login.html'));
+  });
+
+  app.get('/login', (req, res) => res.redirect(302, '/admin/login'));
+
+  app.get(['/admin', '/admin/'], (req, res) => {
+    if (!getSession(req)) return res.redirect('/admin/login');
     return res.sendFile(join(publicDir, 'index.html'));
   });
 
-  app.use(express.static(publicDir, { index: false }));
+  app.get(['/dashboard', '/dashboard/'], (req, res) => res.redirect(302, '/admin'));
+  app.get(['/admin/app.js', '/app.js'], (req, res) => res.sendFile(join(publicDir, 'app.js')));
 
   app.get('/api/session', (req, res) => {
     res.json({
