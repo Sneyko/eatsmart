@@ -136,38 +136,20 @@ a {
 }
 
 .hero {
-  min-height: 76vh;
-  padding: 112px 5vw 64px;
-  background: linear-gradient(180deg, #ffffff 0%, #f6f8f4 100%);
-}
-
-.hero-inner {
-  width: min(1160px, 100%);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 0.82fr) minmax(320px, 1.18fr);
+  min-height: 78vh;
+  max-height: 760px;
+  display: flex;
   align-items: center;
-  gap: 44px;
+  padding: 112px 5vw 64px;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.9) 35%, rgba(255, 255, 255, 0.34) 62%, rgba(255, 255, 255, 0) 100%),
+    url("/site/assets/eatsmart-hero.webp");
+  background-position: center;
+  background-size: cover;
 }
 
 .hero-content {
-  width: 100%;
-}
-
-.hero-media {
-  width: min(800px, 100%);
-  margin: 0;
-  justify-self: end;
-}
-
-.hero-media img {
-  display: block;
-  width: 100%;
-  max-width: 800px;
-  height: auto;
-  border: 1px solid rgba(9, 13, 10, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 22px 60px rgba(9, 13, 10, 0.16);
+  width: min(650px, 100%);
 }
 
 .eyebrow {
@@ -439,7 +421,11 @@ h1 {
 
 .error-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #ffffff 0%, #e9f9ef 100%);
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.8)),
+    url("/site/assets/eatsmart-hero.webp");
+  background-position: center;
+  background-size: cover;
 }
 
 .error-shell {
@@ -466,16 +452,9 @@ h1 {
   }
 
   .hero {
+    min-height: 76vh;
     padding-top: 104px;
-  }
-
-  .hero-inner {
-    grid-template-columns: 1fr;
-    gap: 32px;
-  }
-
-  .hero-media {
-    justify-self: start;
+    background-position: 60% center;
   }
 
   h1 {
@@ -510,16 +489,12 @@ h1 {
   }
 
   .hero {
+    min-height: 74vh;
     padding: 96px 18px 42px;
-  }
-
-  .hero-inner {
-    gap: 26px;
-  }
-
-  .hero-media img {
-    max-height: 220px;
-    object-fit: contain;
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.9) 46%, rgba(255, 255, 255, 0.36) 100%),
+      url("/site/assets/eatsmart-hero.webp");
+    background-position: 62% center;
   }
 
   h1 {
