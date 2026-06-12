@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "deploy-commands": "node src/deploy-commands.js",
-    "dev": "LOG_LEVEL=debug node src/index.js"
+    "dev": "LOG_LEVEL=debug node src/index.js",
+    "install-browsers": "npx playwright install chromium"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -20,6 +21,7 @@
     "express": "^5.2.1",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
+    "playwright": "^1.60.0",
     "sharp": "^0.34.5"
   },
   "license": "MIT"

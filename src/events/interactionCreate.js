@@ -30,6 +30,8 @@ import {
   handleCancelOrder,
   handleCancelOrderModal,
   handleCompleteOrder,
+  handleManualEta,
+  handleManualEtaModal,
   handleSendOrder,
   handleSendOrderModal,
   handleValidateClose,
@@ -125,6 +127,7 @@ async function routeButton(interaction) {
   if (id === 'order:complete') return handleCompleteOrder(interaction);
   if (id === 'order:cancel') return handleCancelOrder(interaction);
   if (id === 'order:validate-close') return handleValidateClose(interaction);
+  if (id === 'order:manual-eta') return handleManualEta(interaction);
   if (id === 'rules:accept') return handleAcceptRules(interaction);
   if (id === 'address:open') return handleAddressGeneratorButton(interaction);
   if (id === 'address:retry') return handleAddressRetryButton(interaction);
@@ -159,5 +162,6 @@ async function routeModal(interaction) {
   }
   if (id === 'order:send-modal') return handleSendOrderModal(interaction);
   if (id === 'order:cancel-modal') return handleCancelOrderModal(interaction);
+  if (id === 'order:manual-eta-modal') return handleManualEtaModal(interaction);
   if (id === 'address:generate') return handleAddressGeneratorModal(interaction);
 }

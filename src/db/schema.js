@@ -196,6 +196,11 @@ export function initDb() {
       near_notified_at INTEGER,
       pin_notified_at INTEGER,
       completed_notified_at INTEGER,
+      manual_fallback_notified_at INTEGER,
+      manual_eta_minutes INTEGER,
+      manual_eta_label TEXT,
+      manual_pin_code TEXT,
+      last_error_reason TEXT,
       fail_count INTEGER DEFAULT 0,
       created_at INTEGER DEFAULT (strftime('%s','now')),
       updated_at INTEGER DEFAULT (strftime('%s','now')),
@@ -298,6 +303,11 @@ export function initDb() {
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_tracking TEXT`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_status_message_id TEXT`); } catch {}
   try { db.exec(`ALTER TABLE tickets ADD COLUMN order_cancel_reason TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE order_trackings ADD COLUMN manual_fallback_notified_at INTEGER`); } catch {}
+  try { db.exec(`ALTER TABLE order_trackings ADD COLUMN manual_eta_minutes INTEGER`); } catch {}
+  try { db.exec(`ALTER TABLE order_trackings ADD COLUMN manual_eta_label TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE order_trackings ADD COLUMN manual_pin_code TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE order_trackings ADD COLUMN last_error_reason TEXT`); } catch {}
 
   logger.info({ path: config.dbPath }, 'Database initialised');
   return db;

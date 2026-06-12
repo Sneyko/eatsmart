@@ -11,6 +11,7 @@ WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV="production"
+ENV PLAYWRIGHT_BROWSERS_PATH="/app/ms-playwright"
 
 
 # Throw-away build stage to reduce size of final image
@@ -38,6 +39,9 @@ RUN apt-get update -qq && \
 
 # Copy built application
 COPY --from=build /app /app
+
+# Install the Chromium browser used for public Uber Eats tracking pages.
+RUN npx playwright install --with-deps chromium
 
 # Setup sqlite3 on a separate volume
 RUN mkdir -p /data

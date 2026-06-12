@@ -12,8 +12,10 @@ import { errorEmbed, infoEmbed, successEmbed } from '../utils/embeds.js';
 import { isAdmin, isStaff } from '../utils/permissions.js';
 import { truncate } from '../utils/validators.js';
 import {
+  getOrderTrackingByTicket,
   getTicketByChannel,
   incrementUserOrderCount,
+  updateOrderTracking,
   updateOrderState,
 } from '../db/queries.js';
 import { closeTicket } from './tickets.js';
@@ -22,6 +24,7 @@ import {
   stopOrderTrackingForTicket,
   syncOrderTrackingForTicket,
 } from '../utils/orderTracking.js';
+import { parseManualEtaInput } from '../utils/uberTrackingBrowser.js';
 
 /**
  * Construit la rangée d'actions cuistot. Le rendu est public mais les
@@ -42,6 +45,12 @@ export function orderActionsRow(ticket) {
         .setLabel('Commande terminée')
         .setEmoji('✅')
         .setStyle(ButtonStyle.Success)
+        .setDisabled(state !== 'sent'),
+      new ButtonBuilder()
+        .setCustomId('order:manual-eta')
+        .setLabel('Modifier ETA')
+        .setEmoji('⏱️')
+        .setStyle(ButtonStyle.Secondary)
         .setDisabled(state !== 'sent'),
       new ButtonBuilder()
         .setCustomId('order:cancel')
@@ -228,6 +237,109 @@ export async function handleSendOrderModal(interaction) {
           : "Commande envoyée. Aucun lien Uber Eats valide n'a été détecté pour le suivi automatique.",
       ),
     ],
+    ephemeral: true,
+  });
+}
+
+/**
+ * Bouton "Modifier ETA" → ouvre un modal ETA + PIN.
+ */
+export async function handleManualEta(interaction) {
+  const ticket = getTicketByChannel(interaction.channel.id);
+  if (!ticket) return interaction.reply({ embeds: [errorEmbed('Ticket introuvable.')], ephemeral: true });
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({ embeds: [errorEmbed('Réservé au staff.')], ephemeral: true });
+  }
+  if (ticket.order_state !== 'sent') {
+    return interaction.reply({
+      embeds: [errorEmbed("L'ETA manuelle est disponible après l'envoi de la commande.")],
+      ephemeral: true,
+    });
+  }
+  if (ticket.claimed_by && interaction.user.id !== ticket.claimed_by && !isAdmin(interaction.member)) {
+    return interaction.reply({
+      embeds: [errorEmbed(`Seul <@${ticket.claimed_by}> peut modifier l'ETA.`)],
+      ephemeral: true,
+    });
+  }
+
+  const tracking = getOrderTrackingByTicket(ticket.id);
+  const modal = new ModalBuilder().setCustomId('order:manual-eta-modal').setTitle('Modifier ETA');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('eta')
+        .setLabel('ETA')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(40)
+        .setValue(tracking?.manual_eta_label || '')
+        .setPlaceholder('Ex : 12 min ou 21:42'),
+    ),
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('pin')
+        .setLabel('Code PIN')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(false)
+        .setMaxLength(12)
+        .setValue(tracking?.manual_pin_code || '')
+        .setPlaceholder('Ex : 1234'),
+    ),
+  );
+  return interaction.showModal(modal);
+}
+
+/**
+ * Soumission du modal ETA manuelle.
+ */
+export async function handleManualEtaModal(interaction) {
+  const ticket = getTicketByChannel(interaction.channel.id);
+  if (!ticket) return interaction.reply({ embeds: [errorEmbed('Ticket introuvable.')], ephemeral: true });
+  if (!isStaff(interaction.member)) {
+    return interaction.reply({ embeds: [errorEmbed('Réservé au staff.')], ephemeral: true });
+  }
+
+  const etaInput = interaction.fields.getTextInputValue('eta').trim();
+  const pinInput = interaction.fields.getTextInputValue('pin')?.trim() || null;
+  const eta = parseManualEtaInput(etaInput);
+  if (!eta) {
+    return interaction.reply({
+      embeds: [errorEmbed('ETA invalide. Exemple accepté : `12 min` ou `21:42`.')],
+      ephemeral: true,
+    });
+  }
+  if (pinInput && !/^\d{4,6}$/.test(pinInput)) {
+    return interaction.reply({
+      embeds: [errorEmbed('Le code PIN doit contenir 4 à 6 chiffres.')],
+      ephemeral: true,
+    });
+  }
+
+  let tracking = getOrderTrackingByTicket(ticket.id);
+  if (!tracking && ticket.order_tracking) {
+    syncOrderTrackingForTicket(ticket);
+    tracking = getOrderTrackingByTicket(ticket.id);
+  }
+  if (!tracking) {
+    return interaction.reply({
+      embeds: [errorEmbed("Aucun suivi Uber Eats n'est actif sur ce ticket.")],
+      ephemeral: true,
+    });
+  }
+
+  updateOrderTracking(tracking.id, {
+    manual_eta_minutes: eta.etaMinutes,
+    manual_eta_label: eta.etaLabel,
+    manual_pin_code: pinInput,
+    active: 1,
+    next_check_at: Math.floor(Date.now() / 1000),
+    fail_count: 0,
+    last_error_reason: null,
+  });
+
+  return interaction.reply({
+    embeds: [successEmbed(`ETA manuelle enregistrée : **${eta.etaLabel}**.`)],
     ephemeral: true,
   });
 }

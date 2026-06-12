@@ -320,6 +320,23 @@ function prepare() {
         WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
         ELSE order_trackings.completed_notified_at
       END,
+      manual_fallback_notified_at = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.manual_fallback_notified_at
+      END,
+      manual_eta_minutes = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.manual_eta_minutes
+      END,
+      manual_eta_label = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.manual_eta_label
+      END,
+      manual_pin_code = CASE
+        WHEN order_trackings.tracking_url != excluded.tracking_url THEN NULL
+        ELSE order_trackings.manual_pin_code
+      END,
+      last_error_reason = NULL,
       updated_at = strftime('%s','now')
   `);
   stmts.listDueOrderTrackings = db.prepare(`
@@ -760,6 +777,11 @@ export function updateOrderTracking(id, patch) {
     'near_notified_at',
     'pin_notified_at',
     'completed_notified_at',
+    'manual_fallback_notified_at',
+    'manual_eta_minutes',
+    'manual_eta_label',
+    'manual_pin_code',
+    'last_error_reason',
     'fail_count',
   ]);
   const entries = Object.entries(patch).filter(([key]) => allowed.has(key));

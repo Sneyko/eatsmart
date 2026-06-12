@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { config, logger } from './config.js';
 import { initDb } from './db/schema.js';
 import { startDashboard } from './dashboard/server.js';
+import { closeTrackingBrowser } from './utils/uberTrackingBrowser.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -49,13 +50,19 @@ process.on('uncaughtException', (err) => logger.error({ err }, 'Uncaught excepti
 
 const dashboardServer = startDashboard(client);
 
-const shutdown = (signal) => {
+let shuttingDown = false;
+const shutdown = async (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   logger.info({ signal }, 'Shutting down');
   dashboardServer?.close?.();
+  await closeTrackingBrowser().catch((err) => {
+    logger.warn({ err }, 'Could not close tracking browser');
+  });
   client.destroy();
   process.exit(0);
 };
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => { void shutdown('SIGINT'); });
+process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
 
 await client.login(config.token);

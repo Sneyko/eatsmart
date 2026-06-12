@@ -1,5 +1,10 @@
-import { EmbedBuilder } from 'discord.js';
-import { logger } from '../config.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+} from 'discord.js';
+import { config, logger } from '../config.js';
 import {
   getOrderTrackingByTicket,
   listDueOrderTrackings,
@@ -8,6 +13,10 @@ import {
   upsertOrderTracking,
 } from '../db/queries.js';
 import { truncate } from './validators.js';
+import {
+  parseUberTrackingText,
+  readUberEatsTrackingWithBrowser,
+} from './uberTrackingBrowser.js';
 
 const POLL_INTERVAL_MS = Number(process.env.ORDER_TRACKING_POLL_SECONDS || 60) * 1000;
 const CHECK_BATCH_SIZE = Number(process.env.ORDER_TRACKING_BATCH_SIZE || 8);
@@ -108,18 +117,32 @@ async function runOrderTrackingPass(client) {
 
 async function processTracking(client, row) {
   const now = nowSeconds();
-  const info = await readUberEatsTracking(row.tracking_url);
+  const autoInfo = await readUberEatsTracking(row.tracking_url);
+  const info = mergeWithManualEta(row, autoInfo);
+  const nextFailCount = autoInfo.readable ? 0 : Number(row.fail_count || 0) + 1;
   const nextCheck = now + Math.max(30, Math.floor(POLL_INTERVAL_MS / 1000));
   const basePatch = {
     last_checked_at: now,
     next_check_at: nextCheck,
-    fail_count: info.readable ? 0 : Number(row.fail_count || 0) + 1,
+    fail_count: nextFailCount,
     last_eta_minutes: info.etaMinutes ?? row.last_eta_minutes ?? null,
     last_eta_label: info.etaLabel ?? row.last_eta_label ?? null,
     last_status_text: info.statusText ?? row.last_status_text ?? null,
+    last_error_reason: autoInfo.readable ? null : autoInfo.errorReason ?? 'unreadable',
   };
 
   if (!info.readable) {
+    if (shouldNotifyManualFallback(row, nextFailCount)) {
+      const channel = await client.channels.fetch(row.channel_id).catch(() => null);
+      if (channel?.send) {
+        await channel.send(buildManualFallbackMessage(row, autoInfo));
+        basePatch.manual_fallback_notified_at = now;
+        logger.info(
+          { trackingId: row.id, ticketId: row.ticket_id, reason: autoInfo.errorReason },
+          'Manual ETA fallback requested',
+        );
+      }
+    }
     updateOrderTracking(row.id, basePatch);
     return;
   }
@@ -181,21 +204,43 @@ function shouldSendReminder(row, info, now) {
 }
 
 export async function readUberEatsTracking(url) {
-  const html = await fetchTrackingHtml(url);
-  const text = normalizeTrackingText(html);
-  const eta = extractEta(text);
-  const status = extractStatus(text);
-  const pinCode = extractPinCode(text);
+  let browserInfo = null;
+  if (config.orderTrackingBrowserEnabled) {
+    browserInfo = await readUberEatsTrackingWithBrowser(url);
+    if (browserInfo.readable) return browserInfo;
+  }
 
-  return {
-    readable: Boolean(eta || status.statusText || pinCode),
-    etaMinutes: eta?.minutes ?? null,
-    etaLabel: eta?.label ?? null,
-    statusText: status.statusText,
-    completed: status.completed,
-    cancelled: status.cancelled,
-    pinCode,
-  };
+  const fallbackInfo = await readUberEatsTrackingWithFetchFallback(url);
+  if (fallbackInfo.readable) return fallbackInfo;
+  return browserInfo ?? fallbackInfo;
+}
+
+export async function readUberEatsTrackingWithFetchFallback(url) {
+  try {
+    const html = await fetchTrackingHtml(url);
+    const text = normalizeTrackingText(html);
+    const parsed = parseUberTrackingText(text);
+    return {
+      ...parsed,
+      source: 'fetch',
+      rawTextSample: null,
+    };
+  } catch (err) {
+    logger.debug({ err }, 'Fetch tracking fallback failed');
+    return {
+      readable: false,
+      etaMinutes: null,
+      etaLabel: null,
+      etaTime: null,
+      statusText: null,
+      completed: false,
+      cancelled: false,
+      pinCode: null,
+      rawTextSample: truncate(err?.message || 'fetch failed', 1000),
+      source: 'fetch',
+      errorReason: 'fetch_error',
+    };
+  }
 }
 
 async function fetchTrackingHtml(url) {
@@ -249,54 +294,85 @@ function extractJsonScriptContent(html, id) {
   return html.match(pattern)?.[1] || '';
 }
 
-function extractEta(text) {
-  const patterns = [
-    /\b(\d{1,3})\s*[-–]\s*(\d{1,3})\s*(?:min|mins|minute|minutes)\b/i,
-    /(?:arriv[ée]e?|arrive|eta|estim[ée]e?|livraison|delivery)[^0-9]{0,80}(\d{1,3})\s*(?:min|mins|minute|minutes)\b/i,
-    /\b(\d{1,3})\s*(?:min|mins|minute|minutes)\s*(?:restantes?|remaining|avant|jusqu)/i,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    const minutes = Number.isFinite(second) ? Math.max(first, second) : first;
-    if (minutes >= 0 && minutes <= 180) {
-      return {
-        minutes,
-        label: Number.isFinite(second) ? `${first}-${second} min` : `${minutes} min`,
-      };
-    }
+function mergeWithManualEta(row, autoInfo) {
+  const manual = buildManualTrackingInfo(row);
+  if (!manual || autoInfo.completed || autoInfo.cancelled) return autoInfo;
+  if (!autoInfo.readable) {
+    return {
+      ...manual,
+      errorReason: autoInfo.errorReason,
+    };
   }
-  return null;
+  if (Number.isFinite(autoInfo.etaMinutes)) {
+    return {
+      ...autoInfo,
+      pinCode: autoInfo.pinCode || manual.pinCode,
+    };
+  }
+  return {
+    ...autoInfo,
+    etaMinutes: manual.etaMinutes,
+    etaLabel: manual.etaLabel,
+    etaTime: manual.etaTime,
+    pinCode: autoInfo.pinCode || manual.pinCode,
+  };
 }
 
-function extractStatus(text) {
-  if (
-    /(commande|order)[^.!?]{0,80}(livr[ée]e?|delivered)/i.test(text) ||
-    /(livr[ée]e?|delivered)[^.!?]{0,80}(commande|order|successfully|avec succ[èe]s)/i.test(text)
-  ) {
-    return { statusText: 'Commande livrée', completed: true, cancelled: false };
-  }
-  if (
-    /(commande|order)[^.!?]{0,80}(annul[ée]e?|cancelled|canceled)/i.test(text) ||
-    /(annul[ée]e?|cancelled|canceled)[^.!?]{0,80}(commande|order)/i.test(text)
-  ) {
-    return { statusText: 'Commande annulée', completed: false, cancelled: true };
-  }
-  return { statusText: null, completed: false, cancelled: false };
+function buildManualTrackingInfo(row) {
+  if (row.manual_eta_minutes === null || row.manual_eta_minutes === undefined) return null;
+  const minutes = Number(row.manual_eta_minutes);
+  if (!Number.isFinite(minutes)) return null;
+  return {
+    readable: true,
+    etaMinutes: minutes,
+    etaLabel: row.manual_eta_label || `${minutes} min`,
+    etaTime: null,
+    statusText: row.last_status_text || 'ETA manuelle',
+    completed: false,
+    cancelled: false,
+    pinCode: row.manual_pin_code || null,
+    rawTextSample: null,
+    source: 'manual',
+    errorReason: null,
+  };
 }
 
-function extractPinCode(text) {
-  const patterns = [
-    /\b(?:pin|code\s*pin|code\s+de\s+(?:livraison|confirmation|s[ée]curit[ée]))\b[^0-9]{0,60}\b(\d{4,6})\b/i,
-    /\b(\d{4,6})\b[^a-z0-9]{0,30}\b(?:pin|code\s*pin|code\s+de\s+(?:livraison|confirmation|s[ée]curit[ée]))\b/i,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match?.[1]) return match[1];
-  }
-  return null;
+function shouldNotifyManualFallback(row, failCount) {
+  if (row.manual_fallback_notified_at) return false;
+  if (row.manual_eta_minutes !== null && row.manual_eta_minutes !== undefined) return false;
+  return failCount >= config.orderTrackingManualFallbackAfterFails;
+}
+
+function manualEtaRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('order:manual-eta')
+      .setLabel('Modifier ETA')
+      .setEmoji('⏱️')
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+function buildManualFallbackMessage(row, info) {
+  const reason = info.errorReason ? `\nRaison technique : \`${truncate(info.errorReason, 80)}\`` : '';
+  return {
+    content: `<@${row.owner_id}>`,
+    embeds: [
+      new EmbedBuilder()
+        .setColor(0xf59e0b)
+        .setTitle('⏱️ ETA manuelle requise')
+        .setDescription(
+          truncate(
+            "Le suivi automatique Uber Eats n'arrive pas à lire l'heure d'arrivée.\n" +
+              'Colle une ETA manuelle ou utilise le bouton **Modifier ETA**.' +
+              reason,
+            4096,
+          ),
+        )
+        .setTimestamp(),
+    ],
+    components: [manualEtaRow()],
+  };
 }
 
 function buildReminderMessage(row, info) {
