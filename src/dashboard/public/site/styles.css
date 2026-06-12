@@ -1,7 +1,10 @@
 :root {
-  --green: #15b84f;
-  --green-dark: #078738;
-  --green-soft: #e9f9ef;
+  --green: #2596be;
+  --green-dark: #15799d;
+  --green-soft: #e8f6fb;
+  --button-top: #39acd4;
+  --button-bottom: #1f7fa8;
+  --button-shadow: rgba(37, 150, 190, 0.34);
   --black: #090d0a;
   --ink: #151a16;
   --muted: #5e675f;
@@ -107,32 +110,49 @@ a {
 .nav-cta,
 .button {
   display: inline-flex;
-  min-height: 46px;
+  min-height: 56px;
   align-items: center;
   justify-content: center;
-  border: 0;
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 20px;
   cursor: pointer;
   font: inherit;
   font-weight: 800;
+  letter-spacing: 0;
   transition:
     transform 160ms ease,
     background 160ms ease,
     color 160ms ease,
-    border-color 160ms ease;
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .nav-cta {
   min-width: 112px;
-  padding: 0 18px;
-  background: var(--black);
+  padding: 0 22px;
+  background: linear-gradient(180deg, var(--button-top) 0%, var(--green) 58%, var(--button-bottom) 100%);
   color: var(--paper);
   font-size: 14px;
+  box-shadow:
+    0 14px 28px var(--button-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.14);
 }
 
 .nav-cta:hover,
 .button:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+.nav-cta:active,
+.button:active {
+  transform: translateY(0);
+}
+
+.nav-cta:focus-visible,
+.button:focus-visible {
+  outline: 3px solid rgba(37, 150, 190, 0.28);
+  outline-offset: 3px;
 }
 
 .hero {
@@ -198,29 +218,42 @@ h1 {
 }
 
 .button {
-  padding: 14px 22px;
+  padding: 15px 26px;
   white-space: normal;
 }
 
 .button-primary {
-  background: var(--green);
-  color: var(--black);
-  box-shadow: 0 16px 36px rgba(21, 184, 79, 0.26);
+  background: linear-gradient(180deg, var(--button-top) 0%, var(--green) 58%, var(--button-bottom) 100%);
+  color: var(--paper);
+  box-shadow:
+    0 16px 34px var(--button-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.14);
 }
 
 .button-primary:hover {
-  background: #24c95f;
+  background: linear-gradient(180deg, #45b9df 0%, #2ca1ca 58%, #2185b0 100%);
+  box-shadow:
+    0 20px 42px rgba(37, 150, 190, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.13);
 }
 
 .button-secondary {
-  border: 1px solid rgba(9, 13, 10, 0.18);
-  background: rgba(255, 255, 255, 0.84);
-  color: var(--black);
+  border-color: rgba(37, 150, 190, 0.32);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--green-dark);
+  box-shadow:
+    0 12px 26px rgba(37, 150, 190, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .button-secondary:hover {
-  border-color: rgba(9, 13, 10, 0.34);
-  background: var(--paper);
+  border-color: rgba(37, 150, 190, 0.52);
+  background: var(--green-soft);
+  box-shadow:
+    0 16px 34px rgba(37, 150, 190, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .hero-proof {
@@ -356,9 +389,12 @@ h1 {
   width: 36px;
   height: 36px;
   margin-bottom: 24px;
-  border-radius: 8px;
-  background: var(--green);
-  color: var(--black);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--button-top), var(--button-bottom));
+  color: var(--paper);
+  box-shadow:
+    0 12px 24px rgba(37, 150, 190, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
   font-size: 14px;
   font-weight: 900;
 }
@@ -484,8 +520,9 @@ h1 {
 
   .nav-cta {
     min-width: 98px;
-    min-height: 42px;
-    padding: 0 14px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 16px;
   }
 
   .hero {
@@ -508,7 +545,7 @@ h1 {
 
   .button {
     width: 100%;
-    min-height: 48px;
+    min-height: 54px;
   }
 
   .hero-proof {
