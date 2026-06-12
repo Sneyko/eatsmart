@@ -1,10 +1,10 @@
 :root {
-  --green: #2596be;
-  --green-dark: #15799d;
-  --green-soft: #e8f6fb;
-  --button-top: #39acd4;
-  --button-bottom: #1f7fa8;
-  --button-shadow: rgba(37, 150, 190, 0.34);
+  --green: #06c167;
+  --green-dark: #048b4b;
+  --green-soft: #e7fbf0;
+  --button-top: #27d982;
+  --button-bottom: #049d54;
+  --button-shadow: rgba(6, 193, 103, 0.34);
   --black: #090d0a;
   --ink: #151a16;
   --muted: #5e675f;
@@ -151,7 +151,7 @@ a {
 
 .nav-cta:focus-visible,
 .button:focus-visible {
-  outline: 3px solid rgba(37, 150, 190, 0.28);
+  outline: 3px solid rgba(6, 193, 103, 0.28);
   outline-offset: 3px;
 }
 
@@ -232,27 +232,27 @@ h1 {
 }
 
 .button-primary:hover {
-  background: linear-gradient(180deg, #45b9df 0%, #2ca1ca 58%, #2185b0 100%);
+  background: linear-gradient(180deg, #33e190 0%, #0acb70 58%, #05a95a 100%);
   box-shadow:
-    0 20px 42px rgba(37, 150, 190, 0.42),
+    0 20px 42px rgba(6, 193, 103, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.34),
     inset 0 -2px 0 rgba(0, 0, 0, 0.13);
 }
 
 .button-secondary {
-  border-color: rgba(37, 150, 190, 0.32);
+  border-color: rgba(6, 193, 103, 0.32);
   background: rgba(255, 255, 255, 0.9);
   color: var(--green-dark);
   box-shadow:
-    0 12px 26px rgba(37, 150, 190, 0.14),
+    0 12px 26px rgba(6, 193, 103, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .button-secondary:hover {
-  border-color: rgba(37, 150, 190, 0.52);
+  border-color: rgba(6, 193, 103, 0.52);
   background: var(--green-soft);
   box-shadow:
-    0 16px 34px rgba(37, 150, 190, 0.2),
+    0 16px 34px rgba(6, 193, 103, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
@@ -393,7 +393,7 @@ h1 {
   background: linear-gradient(180deg, var(--button-top), var(--button-bottom));
   color: var(--paper);
   box-shadow:
-    0 12px 24px rgba(37, 150, 190, 0.28),
+    0 12px 24px rgba(6, 193, 103, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
   font-size: 14px;
   font-weight: 900;
